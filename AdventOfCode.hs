@@ -61,8 +61,34 @@ day02b = [(day02b_calc (data_day02_prep noun verb), noun, verb) | verb <- [0..99
  
 -- Day 03a
 
+day03a = take 1 (sort data_day03a)
 
+data_day03a = [data_day03_output pa1 pa2 pb1 pb2 | a@(pa1@(ax1,ay1),pa2@(ax2,ay2)) <- data_day03a_wire_a, b@(pb1@(bx1,by1),pb2@(bx2,by2)) <- data_day03a_wire_b, (ax1 == ax2 && by1 == by2) || (bx1 == bx2 && ay1 == ay2), if (ax1 == ax2) then ((ay1 < by1) == (ay2 > by1)) && ((bx1 < ax1) == (bx2 > ax1)) else ((by1 < ay1) == (by2 > ay1)) && ((ax1 < bx1) == (ax2 > bx1))]
 
+data_day03_output pa1@(ax1,ay1) pa2@(ax2,ay2)pb1@(bx1,by1) pb2@(bx2,by2)
+ | ax1 == ax2 = (abs ax1 + abs by1,ax1,by1)
+ | otherwise  = (abs bx1 + abs ay1,bx1,ay1)
 
+data_day03a_wire_a = zip ((0,0):a) a
+ where
+  a = data_day03a_spool_wire (head data_day03a_prep) (0,0)
 
+data_day03a_wire_b = zip ((0,0):b) b
+ where
+  b = data_day03a_spool_wire (last data_day03a_prep) (0,0)
 
+data_day03a_spool_wire [] point = []
+
+data_day03a_spool_wire list@(instruction@(heading,distance):tail) point@(x,y)
+ | heading == 'U' = (x,y + distance):(data_day03a_spool_wire tail (x,y + distance))
+ | heading == 'D' = (x,y - distance):(data_day03a_spool_wire tail (x,y - distance))
+ | heading == 'R' = (x + distance,y):(data_day03a_spool_wire tail (x + distance,y))
+ | heading == 'L' = (x - distance,y):(data_day03a_spool_wire tail (x - distance,y))
+ 
+data_day03a_prep = b
+ where
+  a = map (splitOn ',') $ splitOn ';' data_day03a_raw
+  b = map (foldr (\x@(x_h:x_t) acc -> (x_h, read x_t :: Int):acc) []) a
+
+splitOn :: Eq a => a -> [a] -> [[a]]
+splitOn element list = foldr (\x acc@(acc_h:acc_t) -> if x == element then []:acc else (x:acc_h):acc_t) [[]] list
