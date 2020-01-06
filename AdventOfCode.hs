@@ -219,3 +219,23 @@ day05b = day05a_calc data_day05a 0 [5]
 -- boolToInt for Day 05b  
 boolToInt bool = if bool then 1 else 0
 
+-- Day 06a
+
+day06a = foldr (\x acc -> acc + (length (findPathToCOM x)) - 1) 0 data_day06a_list
+
+findPathToCOM "COM" = ["COM"]
+findPathToCOM object = object:(findPathToCOM parent)
+ where parent = head [head x | x <- data_day06a, (last x) == object]
+
+data_day06a_list = nub . concat $ data_day06a
+
+data_day06a = map (splitOn ')') $ splitOn ';' data_day06a_raw
+
+
+-- Day 06b
+
+day06b = (length santaPath) + (length yourPath) - (2 * (length (intersect santaPath yourPath))) - 2
+
+santaPath = findPathToCOM "SAN"
+
+yourPath = findPathToCOM "YOU"
