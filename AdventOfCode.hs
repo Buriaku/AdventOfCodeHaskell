@@ -1,4 +1,5 @@
 import Data.List
+import qualified Data.Map as Map
 import AdventOfCodeData
 
 
@@ -127,16 +128,17 @@ day04b_output = [x | x@(a:b:c:d:e:f:[]) <- data_day04a, ((a == b) && (b /= c)) |
 
 -- Day 05a
 
-day05a = day05a_calc data_day05a 0 [1]
+day05a = day05a_calc data_day05a 0 [1] []
 
-day05a_calc :: [Int] -> Int -> [Int] -> ([Int], [Char], [Int])
+-- updated for  Day 7a
+day05a_calc :: [Int] -> Int -> [Int] -> [Int] -> ([Int], [Char], [Int], [Int])
 
 -- opCodes with three arguments
-day05a_calc intCode position io
- | opCode == 1   = day05a_calc (fst split_arg3 ++ (arg1 + arg2):tail(snd split_arg3)) (position + 4) io
- | opCode == 2   = day05a_calc (fst split_arg3 ++ (arg1 * arg2):tail(snd split_arg3)) (position + 4) io
- | opCode == 7   = day05a_calc (fst split_arg3 ++ (boolToInt (arg1 < arg2)):tail(snd split_arg3)) (position + 4) io
- | opCode == 8   = day05a_calc (fst split_arg3 ++ (boolToInt (arg1 == arg2)):tail(snd split_arg3)) (position + 4) io
+day05a_calc intCode position input output
+ | opCode == 1   = day05a_calc (fst split_arg3 ++ (arg1 + arg2):tail(snd split_arg3)) (position + 4) input output
+ | opCode == 2   = day05a_calc (fst split_arg3 ++ (arg1 * arg2):tail(snd split_arg3)) (position + 4) input output
+ | opCode == 7   = day05a_calc (fst split_arg3 ++ (boolToInt (arg1 < arg2)):tail(snd split_arg3)) (position + 4) input output
+ | opCode == 8   = day05a_calc (fst split_arg3 ++ (boolToInt (arg1 == arg2)):tail(snd split_arg3)) (position + 4) input output
  where
   opCode_raw = intCode !! position
   opCode = mod opCode_raw 100
@@ -162,9 +164,9 @@ day05a_calc intCode position io
   split_arg3 = splitAt arg3 intCode
 
 -- opCodes with two arguments
-day05a_calc intCode position io
- | opCode == 5   = day05a_calc intCode (if (arg1 /= 0) then arg2 else (position + 3)) io
- | opCode == 6   = day05a_calc intCode (if (arg1 == 0) then arg2 else (position + 3)) io
+day05a_calc intCode position input output
+ | opCode == 5   = day05a_calc intCode (if (arg1 /= 0) then arg2 else (position + 3)) input output
+ | opCode == 6   = day05a_calc intCode (if (arg1 == 0) then arg2 else (position + 3)) input output
  
  where
   opCode_raw = intCode !! position
@@ -191,13 +193,13 @@ day05a_calc intCode position io
   --split_arg3 = splitAt arg3 intCode
 
 -- opCodes with one arguments  
-day05a_calc intCode position io 
- | opCode == 3   = let split_arg1 = splitAt arg1 intCode
-                    in day05a_calc (fst split_arg1 ++ (last io):tail(snd split_arg1)) (position + 2) io
- | opCode == 4   = day05a_calc intCode (position + 2) (arg1:io)
+day05a_calc intCode position input output 
+ | opCode == 3   = day05a_calc (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) (tail input) output
+ | opCode == 4   = day05a_calc intCode (position + 2) input (arg1:output)
  where
   opCode_raw = intCode !! position
   opCode = mod opCode_raw 100
+  split_arg1 = splitAt arg1 intCode
   
   param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
   arg1 = if (param1 == 0) && (opCode /= 3)
@@ -205,31 +207,33 @@ day05a_calc intCode position io
           else intCode !! (position + 1)
 
 -- opCodes with no arguments
-day05a_calc intCode position io
- | opCode == 99  = (intCode, "Done 99 at position " ++ show position, io)
- | otherwise     = (intCode, "Error" ++ show opCode ++ "at position " ++ show position, io)
+day05a_calc intCode position input output
+ | opCode == 99  = (intCode, "Done 99 at position " ++ show position, input, output)
+ | otherwise     = (intCode, "Error " ++ show opCode ++ " at position " ++ show position, input, output)
  where
   opCode_raw = intCode !! position
   opCode = mod opCode_raw 100
 
 -- Day 05b
 
-day05b = day05a_calc data_day05a 0 [5]
+day05b = day05a_calc data_day05a 0 [5] []
 
 -- boolToInt for Day 05b  
 boolToInt bool = if bool then 1 else 0
 
 -- Day 06a
 
+-- updated to not be dirty anymore using Data.Map
+
 day06a = foldr (\x acc -> acc + (length (findPathToCOM x)) - 1) 0 data_day06a_list
 
 findPathToCOM "COM" = ["COM"]
 findPathToCOM object = object:(findPathToCOM parent)
- where parent = head [head x | x <- data_day06a, (last x) == object]
+ where parent = (Map.!) data_day06a object
 
-data_day06a_list = nub . concat $ data_day06a
+data_day06a_list = Map.keys data_day06a
 
-data_day06a = map (splitOn ')') $ splitOn ';' data_day06a_raw
+data_day06a = Map.fromList (map ((\[a,b] -> (b,a)).(splitOn ')')) $ splitOn ';' data_day06a_raw)
 
 
 -- Day 06b
@@ -239,3 +243,20 @@ day06b = (length santaPath) + (length yourPath) - (2 * (length (intersect santaP
 santaPath = findPathToCOM "SAN"
 
 yourPath = findPathToCOM "YOU"
+
+-- Day 07a
+
+day07a = reverse(sort (map (day07a_calc) data_day07a_codelist))
+
+day07a_calc (code0:code1:code2:code3:code4:[]) = amp_output output_amp_4
+ where
+  amp_output (_,_,_,(code:_)) = code 
+  output_amp_0 = day05a_calc data_day07a 0 [code0,0] []
+  output_amp_1 = day05a_calc data_day07a 0 [code1,(amp_output output_amp_0)] []
+  output_amp_2 = day05a_calc data_day07a 0 [code2,(amp_output output_amp_1)] []
+  output_amp_3 = day05a_calc data_day07a 0 [code3,(amp_output output_amp_2)] []
+  output_amp_4 = day05a_calc data_day07a 0 [code4,(amp_output output_amp_3)] []
+
+data_day07a_codelist = [[a, b, c, d, e] | a <- [0..4], b <- [0..4], c <- [0..4], d <- [0..4], e <- [0..4], a /= b, a /= c, a /= d, a /= e, b /= c, b /= d, b /= e, c /= d, c /= e, d /= e]
+
+-- Day 07b
