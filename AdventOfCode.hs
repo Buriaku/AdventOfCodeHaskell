@@ -290,3 +290,25 @@ day07b_calc inputs@(input0:input1:input2:input3:[input4]) (memory0:memory1:memor
   output_amp_4 = day05a_calc memory4 position4 (input4 ++ [(amp_output output_amp_3)]) []
 
 data_day07b_codelist = [[a, b, c, d, e] | a <- [5..9], b <- [5..9], c <- [5..9], d <- [5..9], e <- [5..9], a /= b, a /= c, a /= d, a /= e, b /= c, b /= d, b /= e, c /= d, c /= e, d /= e]
+
+-- Day 08a
+
+day08a = (\([_,a,b]) -> (length a) * (length b) ) (group . head $ data_day08a_sorted_layers)
+
+data_day08a_sorted_layers = reverse . sort . map (sort) $ data_day08a_layers
+
+data_day08a_layers = spoolString (25*6) data_day08a
+
+spoolString :: Int -> String -> [String]
+spoolString n [] = []
+spoolString n string = (take n string):(spoolString n (drop n string))
+
+-- Day 08b
+
+day08b = spoolString 25 [day08b_pixel n data_day08a_layers | n <- [0..((25*6)-1)]]
+
+day08b_pixel n list
+ | pixel == '2' = day08b_pixel n (tail list)
+ | otherwise    = pixel
+ 
+ where pixel = (head list) !! n
