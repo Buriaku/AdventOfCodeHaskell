@@ -131,7 +131,7 @@ day04b_output = [x | x@(a:b:c:d:e:f:[]) <- data_day04a, ((a == b) && (b /= c)) |
 day05a = day05a_calc data_day05a 0 [1] []
 
 -- updated for  Day 7a
-day05a_calc :: [Int] -> Int -> [Int] -> [Int] -> ([Int], [Char], [Int], [Int])
+day05a_calc :: [Int] -> Int -> [Int] -> [Int] -> ([Int], ([Char], Int, Int), [Int], [Int])
 
 -- opCodes with three arguments
 day05a_calc intCode position input output
@@ -194,7 +194,9 @@ day05a_calc intCode position input output
 
 -- opCodes with one arguments  
 day05a_calc intCode position input output 
- | opCode == 3   = day05a_calc (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) (tail input) output
+ | opCode == 3   = if input == []
+                    then (intCode, ("Halt", opCode, position), input, output)
+                    else day05a_calc (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) (tail input) output
  | opCode == 4   = day05a_calc intCode (position + 2) input (arg1:output)
  where
   opCode_raw = intCode !! position
@@ -208,8 +210,8 @@ day05a_calc intCode position input output
 
 -- opCodes with no arguments
 day05a_calc intCode position input output
- | opCode == 99  = (intCode, "Done 99 at position " ++ show position, input, output)
- | otherwise     = (intCode, "Error " ++ show opCode ++ " at position " ++ show position, input, output)
+ | opCode == 99  = (intCode, ("Done", opCode, position), input, output)
+ | otherwise     = (intCode, ("Error", opCode, position), input, output)
  where
   opCode_raw = intCode !! position
   opCode = mod opCode_raw 100
@@ -260,3 +262,31 @@ day07a_calc (code0:code1:code2:code3:code4:[]) = amp_output output_amp_4
 data_day07a_codelist = [[a, b, c, d, e] | a <- [0..4], b <- [0..4], c <- [0..4], d <- [0..4], e <- [0..4], a /= b, a /= c, a /= d, a /= e, b /= c, b /= d, b /= e, c /= d, c /= e, d /= e]
 
 -- Day 07b
+
+--day07b = reverse(sort (map (day07a_calc) data_day07a_codelist))
+
+day07b = reverse(sort (map (day07b_output) data_day07b_codelist))
+
+day07b_output codes = day07b_calc (map (\x -> [x]) codes) (replicate 5 data_day07a) (replicate 5 0) 0
+
+day07b_calc inputs@(input0:input1:input2:input3:[input4]) (memory0:memory1:memory2:memory3:[memory4]) (position0:position1:position2:position3:[position4]) input_amp_0 =
+ if amp_opCode(output_amp_4) == 3
+  then
+   day07b_calc
+    (replicate 5 [])
+    ((amp_memory output_amp_0):(amp_memory output_amp_1):(amp_memory output_amp_2):(amp_memory output_amp_3):[amp_memory output_amp_4])
+    ((amp_position output_amp_0):(amp_position output_amp_1):(amp_position output_amp_2):(amp_position output_amp_3):[amp_position output_amp_4])
+    (amp_output output_amp_4)
+  else amp_output output_amp_4
+ where
+  amp_opCode (_,(_,opCode,_),_,_) = opCode
+  amp_position (_,(_,_,position),_,_) = position
+  amp_memory (memory,_,_,(input:_)) = memory
+  amp_output (_,_,_,(output:_)) = output
+  output_amp_0 = day05a_calc memory0 position0 (input0 ++ [input_amp_0]) []
+  output_amp_1 = day05a_calc memory1 position1 (input1 ++ [(amp_output output_amp_0)]) []
+  output_amp_2 = day05a_calc memory2 position2 (input2 ++ [(amp_output output_amp_1)]) []
+  output_amp_3 = day05a_calc memory3 position3 (input3 ++ [(amp_output output_amp_2)]) []
+  output_amp_4 = day05a_calc memory4 position4 (input4 ++ [(amp_output output_amp_3)]) []
+
+data_day07b_codelist = [[a, b, c, d, e] | a <- [5..9], b <- [5..9], c <- [5..9], d <- [5..9], e <- [5..9], a /= b, a /= c, a /= d, a /= e, b /= c, b /= d, b /= e, c /= d, c /= e, d /= e]
