@@ -1,4 +1,5 @@
 import Data.List
+import Data.Array
 import qualified Data.Map as Map
 import AdventOfCodeData
 
@@ -420,3 +421,75 @@ cICC intCode position relativeBase input output
 -- Day 09b
 
 day09b = cICC_output data_day09a [2]
+
+-- Day 10a
+
+day10a = (day10a_pos,day10a_max)
+
+day10a_pos = head [(x,y) | x <- [0..day10a_xmax], y <- [0..day10a_ymax], (day10a_output ! (x,y)) == day10a_max ] 
+
+day10a_max = maximum day10a_output
+
+day10a_output = array ((0,0),(day10a_xmax,day10a_ymax)) [((x,y), countAsteroids x y) | x <- [0..day10a_xmax], y <- [0..day10a_ymax]]
+ where
+  input = data_day10a
+  
+countAsteroids x1 y1 =
+ if input ! (x1,y1)
+  then
+   length [asteroid | asteroid <- [checkAsteroid x1 y1 x2 y2 | x2 <- [0..day10a_xmax], y2 <- [0..day10a_ymax], not ((x1 == x2) && (y1 == y2))] , asteroid]
+  else
+   0
+ where
+  input = data_day10a
+
+checkAsteroid x1 y1 x2 y2 =
+ if input ! (x2,y2)
+  then
+   checkLineOfSight x1 y1 (x2 + stepx) (y2 + stepy) stepx stepy
+  else
+   False 
+ where
+  input = data_day10a
+  steps_ggt = ggt (x1-x2) (y1-y2)
+  stepx = div (x1-x2) steps_ggt
+  stepy = div (y1-y2) steps_ggt
+  
+checkLineOfSight x1 y1 x2 y2 stepx stepy
+ | (x1 == x2) && (y1 == y2) = True
+ | input ! (x2,y2)          = False
+ | otherwise                = checkLineOfSight x1 y1 (x2 + stepx) (y2 + stepy) stepx stepy
+ 
+ where
+  input = data_day10a
+
+ggt c d = maximum [n | n <- [1..(max a b)], (mod a n) == 0, (mod b n) == 0]
+ where
+  a = abs c
+  b = abs d
+
+data_day10a = array ((0,0),(day10a_xmax,day10a_ymax)) [((x,y),(list !! y) !! x ) | x <- [0..day10a_xmax], y <- [0..day10a_ymax]]
+ where
+  list = data_day10a_bool
+  
+day10a_xmax = (length (head data_day10a_bool)) - 1
+day10a_ymax = (length data_day10a_bool) - 1
+
+data_day10a_bool = map (foldr (\x acc -> if x == '#' then True:acc else False:acc) []) (splitOn ';' data_day10a_raw)
+
+-- Day 10b
+
+data_day10b = Map.fromListWith (\[a] b -> a:b) [((angleFromVector (vectorSub (x,y) day10a_pos)),[(x,y)]) | x <- [0..day10a_xmax], y <- [0..day10a_ymax], not (((fst day10a_pos) == x) && ((snd day10a_pos) == y)), data_day10a ! (x,y)]
+
+
+vectorSub (x1,y1) (x2,y2) = (x1 - x2,y1 -y2)
+
+-- (0,-1) equals 0, (1,0) equals pi/2
+angleFromVector (a,b)
+ | y == 0 && x > 0 = pi / 2
+ | y == 0 && x < 0 = (3 / 2) * pi
+ | y < 0           = atan (x/(abs y)) + if x < 0 then 2 * pi else 0
+ | y > 0           = pi - atan (x/(abs y)) -- - if x < 0 then 2 * pi else 0
+ where
+  x = fromIntegral a
+  y = fromIntegral b
