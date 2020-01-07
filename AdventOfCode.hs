@@ -312,3 +312,111 @@ day08b_pixel n list
  | otherwise    = pixel
  
  where pixel = (head list) !! n
+ 
+-- Day 09a
+
+day09a = cICC_output data_day09a [1]
+
+cICC_output program input = (\(_,a,b,c) -> (a,b,c)) (cICC (program ++ (repeat 0)) 0 0 input [])
+
+{-
+test1 :: [Int]
+test1 = [109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99]
+
+test2 :: [Int]
+test2 = [1102,34915192,34915192,7,4,7,99,0]
+
+test3 :: [Int]
+test3 = [104,1125899906842624,99]-}
+
+-- Complete IntCode Computer
+cICC :: [Int] -> Int -> Int -> [Int] -> [Int] -> ([Int], ([Char], Int, Int), [Int], [Int])
+
+-- opCodes with three arguments
+cICC intCode position relativeBase input output
+ | opCode == 1   = cICC (fst split_arg3 ++ (arg1 + arg2):tail(snd split_arg3)) (position + 4) relativeBase input output
+ | opCode == 2   = cICC (fst split_arg3 ++ (arg1 * arg2):tail(snd split_arg3)) (position + 4) relativeBase input output
+ | opCode == 7   = cICC (fst split_arg3 ++ (boolToInt (arg1 < arg2)):tail(snd split_arg3)) (position + 4) relativeBase input output
+ | opCode == 8   = cICC (fst split_arg3 ++ (boolToInt (arg1 == arg2)):tail(snd split_arg3)) (position + 4) relativeBase input output
+ where
+  opCode_raw = intCode !! position
+  opCode = mod opCode_raw 100
+  
+  param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
+  arg1 = case param1 of
+          0 -> intCode !! (intCode !! (position + 1))
+          1 -> intCode !! (position + 1)
+          2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+
+  param2 = div (mod opCode_raw 10000 - mod opCode_raw 1000) 1000
+  arg2 = case param2 of
+          0 -> intCode !! (intCode !! (position + 2))
+          1 -> intCode !! (position + 2)
+          2 -> intCode !! (relativeBase + (intCode !! (position + 2)))
+  
+  -- <bullshit>
+  param3 = div (mod opCode_raw 100000 - mod opCode_raw 10000) 10000
+  arg3 = case param3 of
+          0 -> intCode !! (position + 3)
+          2 -> relativeBase + (intCode !! (position + 3))
+  -- </bullshit>
+
+  split_arg3 = splitAt arg3 intCode
+
+-- opCodes with two arguments
+cICC intCode position relativeBase input output
+ | opCode == 5   = cICC intCode (if (arg1 /= 0) then arg2 else (position + 3)) relativeBase input output
+ | opCode == 6   = cICC intCode (if (arg1 == 0) then arg2 else (position + 3)) relativeBase input output
+ 
+ where
+  opCode_raw = intCode !! position
+  opCode = mod opCode_raw 100
+    
+  param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
+  arg1 = case param1 of
+          0 -> intCode !! (intCode !! (position + 1))
+          1 -> intCode !! (position + 1)
+          2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+
+  param2 = div (mod opCode_raw 10000 - mod opCode_raw 1000) 1000
+  arg2 = case param2 of
+          0 -> intCode !! (intCode !! (position + 2))
+          1 -> intCode !! (position + 2)
+          2 -> intCode !! (relativeBase + (intCode !! (position + 2)))
+  
+-- opCodes with one arguments  
+cICC intCode position relativeBase input output 
+ | opCode == 3   = if input == []
+                    then (intCode, ("Halt", opCode, position), input, output)
+                    else cICC (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) relativeBase (tail input) output
+ | opCode == 4   = cICC intCode (position + 2) relativeBase input (arg1:output)
+ | opCode == 9   = cICC intCode (position + 2) (relativeBase + arg1)  input output
+ where
+  opCode_raw = intCode !! position
+  opCode = mod opCode_raw 100
+  split_arg1 = splitAt arg1 intCode
+  
+  param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
+  arg1 = if (opCode /= 3)
+          then case param1 of
+           0 -> intCode !! (intCode !! (position + 1))
+           1 -> intCode !! (position + 1)
+           2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+          -- <bullshit> 
+          else case param1 of
+           0 -> intCode !! (position + 1)
+           2 -> relativeBase + (intCode !! (position + 1))
+          -- </bullshit>
+         
+
+-- opCodes with no arguments
+cICC intCode position relativeBase input output
+ | opCode == 99  = (intCode, ("Done", opCode, position), input, output)
+ | otherwise     = (intCode, ("Error", opCode, position), input, output)
+ where
+  opCode_raw = intCode !! position
+  opCode = mod opCode_raw 100
+  
+-- Day 09b
+
+day09b = cICC_output data_day09a [2]
