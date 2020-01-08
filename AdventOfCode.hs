@@ -316,22 +316,16 @@ day08b_pixel n list
  
 -- Day 09a
 
-day09a = cICC_output data_day09a [1]
+day09a = cICC_output (cICC_init data_day09a) 0 0 [1]
 
-cICC_output program input = (\(_,a,b,c) -> (a,b,c)) (cICC (program ++ (repeat 0)) 0 0 input [])
+cICC_init program = program ++ (repeat 0)
 
-{-
-test1 :: [Int]
-test1 = [109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99]
+cICC_output memory position relativeBase input  = (\(_,a,b,c,d,e,f) -> (a,b,c,d,e,f)) (cICC memory position relativeBase input [])
 
-test2 :: [Int]
-test2 = [1102,34915192,34915192,7,4,7,99,0]
-
-test3 :: [Int]
-test3 = [104,1125899906842624,99]-}
+cICC_output_raw memory position relativeBase input  = cICC memory position relativeBase input []
 
 -- Complete IntCode Computer
-cICC :: [Int] -> Int -> Int -> [Int] -> [Int] -> ([Int], ([Char], Int, Int), [Int], [Int])
+cICC :: [Int] -> Int -> Int -> [Int] -> [Int] -> ([Int], [Char], Int, Int, Int, [Int], [Int])
 
 -- opCodes with three arguments
 cICC intCode position relativeBase input output
@@ -388,7 +382,7 @@ cICC intCode position relativeBase input output
 -- opCodes with one arguments  
 cICC intCode position relativeBase input output 
  | opCode == 3   = if input == []
-                    then (intCode, ("Halt", opCode, position), input, output)
+                    then (intCode, "Halt", opCode, position, relativeBase, input, output)
                     else cICC (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) relativeBase (tail input) output
  | opCode == 4   = cICC intCode (position + 2) relativeBase input (arg1:output)
  | opCode == 9   = cICC intCode (position + 2) (relativeBase + arg1)  input output
@@ -412,15 +406,15 @@ cICC intCode position relativeBase input output
 
 -- opCodes with no arguments
 cICC intCode position relativeBase input output
- | opCode == 99  = (intCode, ("Done", opCode, position), input, output)
- | otherwise     = (intCode, ("Error", opCode, position), input, output)
+ | opCode == 99  = (intCode, "Done", opCode, position, relativeBase, input, output)
+ | otherwise     = (intCode, "Error", opCode, position, relativeBase, input, output)
  where
   opCode_raw = intCode !! position
   opCode = mod opCode_raw 100
   
 -- Day 09b
 
-day09b = cICC_output data_day09a [2]
+day09b = cICC_output (cICC_init data_day09a) 0 0 [2]
 
 -- Day 10a
 
@@ -479,10 +473,27 @@ data_day10a_bool = map (foldr (\x acc -> if x == '#' then True:acc else False:ac
 
 -- Day 10b
 
-data_day10b = Map.fromListWith (\[a] b -> a:b) [((angleFromVector (vectorSub (x,y) day10a_pos)),[(x,y)]) | x <- [0..day10a_xmax], y <- [0..day10a_ymax], not (((fst day10a_pos) == x) && ((snd day10a_pos) == y)), data_day10a ! (x,y)]
+day10b = head (drop 199 (reverse day10b_output))
+
+day10b_output = day10b_calc data_day10b []
+
+day10b_calc input acc
+ | new_acc == acc = acc
+ | otherwise      = day10b_calc (fmap (\x -> case x of _:a -> a; [] -> []) input) new_acc
+ where
+  new_acc = (Map.foldl (\acc x -> case x of a:b -> a:acc; [] -> acc) acc input)
+
+data_day10b = fmap (sortBy data_day10b_sort {-(\(a,b) (c,d) -> compare ((a*a) + (b * b)) ((c * c) + (d * d)))-}) data_day10b_unsorted
+
+data_day10b_sort p q = compare ((a*a) + (b * b)) ((c * c) + (d * d))
+ where
+  (a,b) = vectorSub p day10a_pos
+  (c,d) = vectorSub q day10a_pos
+
+data_day10b_unsorted = Map.fromListWith (\[a] b -> a:b) [((angleFromVector (vectorSub (x,y) day10a_pos)),[(x,y)]) | x <- [0..day10a_xmax], y <- [0..day10a_ymax], not (((fst day10a_pos) == x) && ((snd day10a_pos) == y)), data_day10a ! (x,y)]
 
 
-vectorSub (x1,y1) (x2,y2) = (x1 - x2,y1 -y2)
+vectorSub (x1,y1) (x2,y2) = (x1 - x2,y1 - y2)
 
 -- (0,-1) equals 0, (1,0) equals pi/2
 angleFromVector (a,b)
@@ -493,3 +504,47 @@ angleFromVector (a,b)
  where
   x = fromIntegral a
   y = fromIntegral b
+  
+-- Day 11a
+
+day11a = length (Map.keys (fst day11a_output))
+
+day11a_output = day11a_robot (cICC_init data_day11a) 0 0 [0] data_day11a_map (0,0) 0
+
+--day11a_robot :: [Int] -> Int -> Int -> [Int] -> Map.Map (Int, Int) Int -> (Int, Int) -> Int -> Map.Map (Int, Int) Int
+day11a_robot memory_old position_old relativeBase_old input map_old robotPosition_old@(x,y) robotFacing_old
+ | opCode == 3  = day11a_robot memory position relativeBase [mapColor] map robotPosition robotFacing
+                   
+ | opCode == 99 = (map, output_raw)
+
+ where
+  output_raw = cICC_output_raw memory_old position_old relativeBase_old input
+  memory = (\(a,b,c,d,e,f,g) -> a) output_raw
+  opCode = (\(a,b,c,d,e,f,g) -> c) output_raw
+  position = (\(a,b,c,d,e,f,g) -> d) output_raw
+  relativeBase = (\(a,b,c,d,e,f,g) -> e) output_raw
+  output = (\(a,b,c,d,e,f,g) -> g) output_raw
+  paintColor = head output
+  rotate = last output
+  robotFacing = mod (robotFacing_old + 3 + (2 * rotate)) 4
+  robotPosition = case robotFacing of
+                   0 -> (x,y-1)
+                   1 -> (x+1,y)
+                   2 -> (x,y+1)
+                   3 -> (x-1,y)
+  mapColor_old = day11a_getColor map_old robotPosition_old
+  map = Map.insert robotPosition_old paintColor map_old
+  
+      {-  case (paintColor == mapColor_old) of
+         True  -> map_old
+         False -> Map.insert robotPosition paintColor map_old -}
+         
+  mapColor = day11a_getColor map robotPosition
+  
+
+data_day11a_map = Map.empty
+
+day11a_getColor map p = case color of
+                         Just a  -> a
+                         Nothing -> 0
+ where color = map Map.!? p
