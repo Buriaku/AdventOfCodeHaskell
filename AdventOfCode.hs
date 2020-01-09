@@ -298,15 +298,15 @@ day08a = (\([_,a,b]) -> (length a) * (length b) ) (group . head $ data_day08a_so
 
 data_day08a_sorted_layers = reverse . sort . map (sort) $ data_day08a_layers
 
-data_day08a_layers = spoolString (25*6) data_day08a
+data_day08a_layers = spoolList (25*6) data_day08a
 
-spoolString :: Int -> String -> [String]
-spoolString n [] = []
-spoolString n string = (take n string):(spoolString n (drop n string))
+--spoolList :: Int -> String -> [String]
+spoolList n [] = []
+spoolList n string = (take n string):(spoolList n (drop n string))
 
 -- Day 08b
 
-day08b = spoolString 25 [day08b_pixel n data_day08a_layers | n <- [0..((25*6)-1)]]
+day08b = spoolList 25 [day08b_pixel n data_day08a_layers | n <- [0..((25*6)-1)]]
 
 day08b_pixel n list
  | pixel == '2' = day08b_pixel n (tail list)
@@ -498,7 +498,7 @@ vectorSub (x1,y1) (x2,y2) = (x1 - x2,y1 - y2)
 -- (0,-1) equals 0, (1,0) equals pi/2
 angleFromVector (a,b)
  | y == 0 && x > 0 = pi / 2
- | y == 0 && x < 0 = (3 / 2) * pi
+ | y == 0 && x < 0 = 3 / 2 * pi
  | y < 0           = atan (x/(abs y)) + if x < 0 then 2 * pi else 0
  | y > 0           = pi - atan (x/(abs y)) -- - if x < 0 then 2 * pi else 0
  where
@@ -511,40 +511,149 @@ day11a = length (Map.keys (fst day11a_output))
 
 day11a_output = day11a_robot (cICC_init data_day11a) 0 0 [0] data_day11a_map (0,0) 0
 
---day11a_robot :: [Int] -> Int -> Int -> [Int] -> Map.Map (Int, Int) Int -> (Int, Int) -> Int -> Map.Map (Int, Int) Int
+
+-- day11a_robot :: [Int] -> Int -> Int -> [Int] -> Map.Map (Int, Int) Int -> (Int, Int) -> Int -> (Map.Map (Int, Int) Int, ([Int], [Char], Int, Int, Int, [Int], [Int]))
 day11a_robot memory_old position_old relativeBase_old input map_old robotPosition_old@(x,y) robotFacing_old
- | opCode == 3  = day11a_robot memory position relativeBase [mapColor] map robotPosition robotFacing
-                   
+ -- if halt then do next step
+ | opCode == 3  = day11a_robot memory position relativeBase [mapColor] map robotPosition robotFacing                 
+ -- if done ore error then end
  | opCode == 99 = (map, output_raw)
+ | otherwise    = (map, output_raw)
 
  where
+  -- do step
   output_raw = cICC_output_raw memory_old position_old relativeBase_old input
   memory = (\(a,b,c,d,e,f,g) -> a) output_raw
   opCode = (\(a,b,c,d,e,f,g) -> c) output_raw
   position = (\(a,b,c,d,e,f,g) -> d) output_raw
   relativeBase = (\(a,b,c,d,e,f,g) -> e) output_raw
   output = (\(a,b,c,d,e,f,g) -> g) output_raw
-  paintColor = head output
-  rotate = last output
-  robotFacing = mod (robotFacing_old + 3 + (2 * rotate)) 4
+  
+  -- don't swap these -.-'
+  paintColor = last output
+  rotate = head output
+  
+  -- put color from output into map
+  mapColor_old = day11a_getColor map_old robotPosition_old
+  map = Map.insert robotPosition_old paintColor map_old
+         
+  -- calculate robot movement
+  robotFacing = mod (robotFacing_old + 3 + 2 * rotate) 4
   robotPosition = case robotFacing of
                    0 -> (x,y-1)
                    1 -> (x+1,y)
                    2 -> (x,y+1)
-                   3 -> (x-1,y)
-  mapColor_old = day11a_getColor map_old robotPosition_old
-  map = Map.insert robotPosition_old paintColor map_old
-  
-      {-  case (paintColor == mapColor_old) of
-         True  -> map_old
-         False -> Map.insert robotPosition paintColor map_old -}
-         
+                   3 -> (x-1,y)         
+  -- get color from camera
   mapColor = day11a_getColor map robotPosition
   
-
+--data_day11a_map :: Map.Map (Int, Int) Int
 data_day11a_map = Map.empty
 
+day11a_getColor :: Map.Map (Int, Int) Int -> (Int,Int) -> Int
 day11a_getColor map p = case color of
                          Just a  -> a
                          Nothing -> 0
  where color = map Map.!? p
+
+-- Day 11b
+
+day11b = spoolList (xmax - xmin + 1) [(day11a_getColor day11b_output (x,y)) | y <- [ymin..ymax], x <- [xmin..xmax]]
+ where
+  keys = Map.keys day11b_output
+  keys_x = map (fst) keys
+  keys_y = map (snd) keys
+  xmin = minimum keys_x
+  xmax = maximum keys_x
+  ymin = minimum keys_y
+  ymax = maximum keys_y
+ 
+day11b_output = fst (day11a_robot (cICC_init data_day11a) 0 0 [1] data_day11a_map (0,0) 0)
+
+-- Day 12a
+
+day12a = calcTotalEnergy (last (take 1001 (day12a_calc day12a_vec day12a_vel)))
+
+calcTotalEnergy (vectors,velocities) = sum (zipWith(*) (map (\(a,b,c) -> (abs a) + (abs b) + (abs c)) vectors) (map (\(a,b,c) -> (abs a) + (abs b) + (abs c)) velocities))
+
+day12a_calc vectors velocities = [(vectors, velocities)] ++ (day12a_calc vectors_new velocities_new)
+ where
+  velocities_new = zipWith (vectorAdd3) velocities (getAccelerations vectors)
+  vectors_new = zipWith (vectorAdd3) vectors velocities_new
+  
+getAccelerations vectors = foldr (\vec1 acc -> (foldl1 (\acc x -> vectorAdd3 acc x) [calcAcceleration vec1 vec2 | vec2 <- vectors, vec1 /= vec2]):acc) [] vectors
+
+calcAcceleration (x,y,z) (r,s,t) = (a,b,c)
+ where
+  a = compareToTrinary r x
+  b = compareToTrinary s y
+  c = compareToTrinary t z
+  
+compareToTrinary a b = case (compare a b) of
+                        GT -> 1
+                        EQ -> 0
+                        LT -> (-1)
+
+day12a_vel = replicate 4 (0,0,0)
+
+day12a_vec = data_day12a
+
+vectorAdd3 (x1,y1,z1) (x2,y2,z2) = (x1 + x2, y1 + y2, z1 + z2)
+
+-- Day 12b
+
+-- for solution divide product of the 3 periods by common prime factors
+
+day12b = (x_period,y_period,z_period)
+ where
+  x_period = length (takeWhile (compareCoordinate 0 (day12a_vec,day12a_vel)) (tail (day12a_calc day12a_vec day12a_vel))) + 1
+  y_period = length (takeWhile (compareCoordinate 1 (day12a_vec,day12a_vel)) (tail (day12a_calc day12a_vec day12a_vel))) + 1
+  z_period = length (takeWhile (compareCoordinate 2 (day12a_vec,day12a_vel)) (tail (day12a_calc day12a_vec day12a_vel))) + 1
+
+getPrimeFactors :: Int -> [Int]
+getPrimeFactors n = primeFactors n 2 primes []
+
+primeFactors :: Int -> Int -> [Int] -> [Int] -> [Int]
+primeFactors n lastPrime primeList@(nextPrime:otherPrimes) divisorList
+ | mod n lastPrime == 0 = primeFactors (div n lastPrime) lastPrime primeList (lastPrime:divisorList)
+ | mod n nextPrime == 0 = primeFactors (div n nextPrime) nextPrime otherPrimes (nextPrime:divisorList)
+ | nextPrime > n        = divisorList
+ | otherwise            = primeFactors n nextPrime otherPrimes divisorList
+
+primes :: [Int]
+primes = [n | n <- [2..], foldl (\acc x -> if mod n x == 0 then n:acc else acc) [] [2..(floor (sqrt (fromIntegral n)))] == []]
+
+compareCoordinate coord ([a,b,c,d],[e,f,g,h]) ([i,j,k,l],[m,n,o,p])
+ = not (((getCoordinate coord a) == (getCoordinate coord i)) &&
+        ((getCoordinate coord b) == (getCoordinate coord j)) &&
+        ((getCoordinate coord c) == (getCoordinate coord k)) &&
+        ((getCoordinate coord d) == (getCoordinate coord l)) &&
+        ((getCoordinate coord e) == (getCoordinate coord m)) &&
+        ((getCoordinate coord f) == (getCoordinate coord n)) &&
+        ((getCoordinate coord g) == (getCoordinate coord o)) &&
+        ((getCoordinate coord h) == (getCoordinate coord p)))
+
+getCoordinate :: Int -> (Int,Int,Int) -> Int
+getCoordinate coord (x,y,z) = case coord of
+                               0 -> x
+                               1 -> y
+                               2 -> z
+                       
+
+-- the idiots way
+-- day12b_nope = length (takeWhile ((day12a_vec,day12a_vel) /=) (tail (day12a_calc day12a_vec day12a_vel))) + 1
+
+day12b_test = length (takeWhile ((data_day12b_test,day12a_vel) /=) (tail (day12a_calc data_day12b_test day12a_vel))) + 1
+
+data_day12b_test :: [(Int,Int,Int)]
+data_day12b_test = [(-1, 0, 2),(2,-10,-7),(4,-8,8),(3,5,-1)]
+
+-- Day 13a
+
+day13a = length (Map.keys (Map.filter (== 2) map))
+ where
+  map = Map.fromList (foldr (\[a,b,c] acc -> ((a,b),c):acc) [] day13a_output)
+
+day13a_output = spoolList 3 (reverse ((\(a,b,c,d,e,f,g) -> g) day13a_calc))
+
+day13a_calc = cICC_output_raw (cICC_init data_day13a) 0 0 []
