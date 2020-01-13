@@ -318,99 +318,98 @@ day08b_pixel n list
 
 day09a = cICC_output (cICC_init data_day09a) 0 0 [1]
 
-cICC_init program = program ++ (repeat 0)
+cICC_init program = Map.fromList [(n, (program !! n)) | n <- [0..((length program)-1)]]
 
 cICC_output memory position relativeBase input  = (\(_,a,b,c,d,e,f) -> (a,b,c,d,e,f)) (cICC memory position relativeBase input [])
 
 cICC_output_raw memory position relativeBase input  = cICC memory position relativeBase input []
 
 -- Complete IntCode Computer
-cICC :: [Int] -> Int -> Int -> [Int] -> [Int] -> ([Int], [Char], Int, Int, Int, [Int], [Int])
+-- cICC :: [Int] -> Int -> Int -> [Int] -> [Int] -> ([Int], [Char], Int, Int, Int, [Int], [Int])
 
 -- opCodes with three arguments
-cICC intCode position relativeBase input output
- | opCode == 1   = cICC (fst split_arg3 ++ (arg1 + arg2):tail(snd split_arg3)) (position + 4) relativeBase input output
- | opCode == 2   = cICC (fst split_arg3 ++ (arg1 * arg2):tail(snd split_arg3)) (position + 4) relativeBase input output
- | opCode == 7   = cICC (fst split_arg3 ++ (boolToInt (arg1 < arg2)):tail(snd split_arg3)) (position + 4) relativeBase input output
- | opCode == 8   = cICC (fst split_arg3 ++ (boolToInt (arg1 == arg2)):tail(snd split_arg3)) (position + 4) relativeBase input output
+cICC intMap position relativeBase input output
+ | opCode == 1   = cICC (Map.insert arg3 (arg1 + arg2) intMap) (position + 4) relativeBase input output
+ | opCode == 2   = cICC (Map.insert arg3 (arg1 * arg2) intMap) (position + 4) relativeBase input output
+ | opCode == 7   = cICC (Map.insert arg3 (boolToInt (arg1 < arg2)) intMap) (position + 4) relativeBase input output
+ | opCode == 8   = cICC (Map.insert arg3 (boolToInt (arg1 == arg2)) intMap) (position + 4) relativeBase input output
  where
-  opCode_raw = intCode !! position
+  opCode_raw = intMapFind position intMap
   opCode = mod opCode_raw 100
   
   param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
   arg1 = case param1 of
-          0 -> intCode !! (intCode !! (position + 1))
-          1 -> intCode !! (position + 1)
-          2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+          0 -> intMapFind (intMapFind (position + 1) intMap) intMap
+          1 -> intMapFind (position + 1) intMap
+          2 -> intMapFind (relativeBase + (intMapFind (position + 1) intMap)) intMap
 
   param2 = div (mod opCode_raw 10000 - mod opCode_raw 1000) 1000
   arg2 = case param2 of
-          0 -> intCode !! (intCode !! (position + 2))
-          1 -> intCode !! (position + 2)
-          2 -> intCode !! (relativeBase + (intCode !! (position + 2)))
+          0 -> intMapFind (intMapFind (position + 2) intMap) intMap
+          1 -> intMapFind (position + 2) intMap
+          2 -> intMapFind (relativeBase + (intMapFind (position + 2) intMap)) intMap
   
   -- <bullshit>
   param3 = div (mod opCode_raw 100000 - mod opCode_raw 10000) 10000
   arg3 = case param3 of
-          0 -> intCode !! (position + 3)
-          2 -> relativeBase + (intCode !! (position + 3))
+          0 -> intMapFind (position + 3) intMap
+          2 -> relativeBase + (intMapFind (position + 3) intMap)
   -- </bullshit>
 
-  split_arg3 = splitAt arg3 intCode
-
 -- opCodes with two arguments
-cICC intCode position relativeBase input output
- | opCode == 5   = cICC intCode (if (arg1 /= 0) then arg2 else (position + 3)) relativeBase input output
- | opCode == 6   = cICC intCode (if (arg1 == 0) then arg2 else (position + 3)) relativeBase input output
+cICC intMap position relativeBase input output
+ | opCode == 5   = cICC intMap (if (arg1 /= 0) then arg2 else (position + 3)) relativeBase input output
+ | opCode == 6   = cICC intMap (if (arg1 == 0) then arg2 else (position + 3)) relativeBase input output
  
  where
-  opCode_raw = intCode !! position
+  opCode_raw = intMapFind position intMap
   opCode = mod opCode_raw 100
     
   param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
   arg1 = case param1 of
-          0 -> intCode !! (intCode !! (position + 1))
-          1 -> intCode !! (position + 1)
-          2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+          0 -> intMapFind (intMapFind (position + 1) intMap) intMap
+          1 -> intMapFind (position + 1) intMap
+          2 -> intMapFind (relativeBase + (intMapFind (position + 1) intMap)) intMap
 
   param2 = div (mod opCode_raw 10000 - mod opCode_raw 1000) 1000
   arg2 = case param2 of
-          0 -> intCode !! (intCode !! (position + 2))
-          1 -> intCode !! (position + 2)
-          2 -> intCode !! (relativeBase + (intCode !! (position + 2)))
+          0 -> intMapFind (intMapFind (position + 2) intMap) intMap
+          1 -> intMapFind (position + 2) intMap
+          2 -> intMapFind (relativeBase + (intMapFind (position + 2) intMap)) intMap
   
 -- opCodes with one arguments  
-cICC intCode position relativeBase input output 
+cICC intMap position relativeBase input output 
  | opCode == 3   = if input == []
-                    then (intCode, "Halt", opCode, position, relativeBase, input, output)
-                    else cICC (fst split_arg1 ++ (head input):tail(snd split_arg1)) (position + 2) relativeBase (tail input) output
- | opCode == 4   = cICC intCode (position + 2) relativeBase input (arg1:output)
- | opCode == 9   = cICC intCode (position + 2) (relativeBase + arg1)  input output
+                    then (intMap, "Halt", opCode, position, relativeBase, input, output)
+                    else cICC (Map.insert arg1 (head input) intMap) (position + 2) relativeBase (tail input) output
+ | opCode == 4   = cICC intMap (position + 2) relativeBase input (arg1:output)
+ | opCode == 9   = cICC intMap (position + 2) (relativeBase + arg1)  input output
  where
-  opCode_raw = intCode !! position
+  opCode_raw = intMapFind position intMap
   opCode = mod opCode_raw 100
-  split_arg1 = splitAt arg1 intCode
-  
+    
   param1 = div (mod opCode_raw 1000 - mod opCode_raw 100) 100
   arg1 = if (opCode /= 3)
           then case param1 of
-           0 -> intCode !! (intCode !! (position + 1))
-           1 -> intCode !! (position + 1)
-           2 -> intCode !! (relativeBase + (intCode !! (position + 1)))
+           0 -> intMapFind (intMapFind (position + 1) intMap) intMap
+           1 -> intMapFind (position + 1) intMap
+           2 -> intMapFind (relativeBase + (intMapFind (position + 1) intMap)) intMap
           -- <bullshit> 
           else case param1 of
-           0 -> intCode !! (position + 1)
-           2 -> relativeBase + (intCode !! (position + 1))
+           0 -> intMapFind (position + 1) intMap
+           2 -> relativeBase + (intMapFind (position + 1) intMap)
           -- </bullshit>
          
 
 -- opCodes with no arguments
-cICC intCode position relativeBase input output
- | opCode == 99  = (intCode, "Done", opCode, position, relativeBase, input, output)
- | otherwise     = (intCode, "Error", opCode, position, relativeBase, input, output)
+cICC intMap position relativeBase input output
+ | opCode == 99  = (intMap, "Done", opCode, position, relativeBase, input, output)
+ | otherwise     = (intMap, "Error", opCode, position, relativeBase, input, output)
  where
-  opCode_raw = intCode !! position
+  opCode_raw = intMapFind position intMap
   opCode = mod opCode_raw 100
+  
+intMapFind position intMap = Map.findWithDefault 0 position intMap
   
 -- Day 09b
 
@@ -657,3 +656,135 @@ day13a = length (Map.keys (Map.filter (== 2) map))
 day13a_output = spoolList 3 (reverse ((\(a,b,c,d,e,f,g) -> g) day13a_calc))
 
 day13a_calc = cICC_output_raw (cICC_init data_day13a) 0 0 []
+
+-- Day 13b
+
+day13b =
+ do
+  io <- sequence (map (day13b_print) map_list)
+  return ()
+ where
+  map_list = day13b_output_auto (cICC_init data_day13b) []
+  
+day13b_print map =
+ do
+  io <- putStrLn (concat [[day13b_intToChar (map Map.! (x,y)) | x <- [0..xmax]] ++ "\n" | y <- [0..ymax]])
+  print (map Map.! (-1,0))
+ where
+  xmax = 42
+  ymax = 22
+
+day13b_old input0 =
+ do
+  io <- putStrLn (concat [[day13b_intToChar (map Map.! (x,y)) | x <- [0..xmax]] ++ "\n" | y <- [0..ymax]])
+  print (map Map.! (-1,0))
+ where
+  map = Map.fromList (foldr (\[a,b,c] acc -> ((a,b),c):acc) [] (day13b_output input))
+  xmax = 42
+  ymax = 22
+  input = input1 ++ input0
+  
+input1=[]
+
+day13b_intToChar int
+ | int == 0 = ' '
+ | int == 1 = '#'
+ | int == 2 = 'x'
+ | int == 3 = '='
+ | int == 4 = 'o'
+
+day13b_output_auto intMap input
+ | block == Nothing = [map]
+ | opCode == 3      = case compare ball_x paddle_x of
+                       GT -> map:day13b_output_auto intMap_new [1]
+                       EQ -> map:day13b_output_auto intMap_new [0]
+                       LT -> map:day13b_output_auto intMap_new [-1]
+ | opCode == 99     = [map]
+ where
+  calc_output = day13b_calc_auto intMap input
+  output = spoolList 3 (reverse ((\(a,b,c,d,e,f,g) -> g)calc_output))
+  map = Map.fromList (foldr (\[a,b,c] acc -> ((a,b),c):acc) []output)
+  inverseMap = Map.fromList (foldr (\[a,b,c] acc -> (c,(a,b)):acc) [] output)
+  intMap_new = (\(a,b,c,d,e,f,g) -> a) calc_output
+  opCode = (\(a,b,c,d,e,f,g) -> c) calc_output
+    
+  block = inverseMap Map.!? 1 
+  ball = inverseMap Map.! 4
+  ball_x = (\(a,b) -> a) ball
+  paddle = inverseMap Map.! 3
+  paddle_x = (\(a,b) -> a) paddle
+
+day13b_output input = spoolList 3 (reverse ((\(a,b,c,d,e,f,g) -> g) (day13b_calc input)))
+
+day13b_calc_auto intMap input = cICC_output_raw intMap 0 0 input
+
+day13b_calc input = cICC_output_raw (cICC_init data_day13b) 0 0 input
+
+data_day13b = 2:(tail data_day13a)
+
+-- Day 14a
+
+day14a = (show totalOre) ++ " - " ++ (show redundantOre) ++ " = " ++ (show (totalOre - redundantOre))
+ where
+  output = day14a_getOre "FUEL"
+  totalOre = (\(a,b,c) -> b) output
+  waste = Map.toList (Map.fromListWith (\a b -> a + b) (map (\(a,b) -> (b,a)) ((\(a,b,c) -> c) output)))
+  redundantOre = foldl (getRedundantOre) 0 waste
+
+getRedundantOre acc (product,wasteMultiplier) = acc + (div wasteMultiplier productMultiplier) * productOre
+ where
+  output = day14a_getOre product
+  productOre = (\(a,b,c) -> b) output
+  productMultiplier = (\(a,b,c) -> a) output
+
+-- day14a_getOre :: String -> (Int,Int)
+
+day14a_getOre "ORE" = (1,1,[])
+
+day14a_getOre product = (\a (b,c) -> (a,b,c)) productMultiplier (foldl (foldOre) (0,[]) eductList)
+ where
+  reaction = data_day14a Map.! product
+  eductList = fst reaction
+  productMultiplier = fst (snd reaction)
+
+-- foldOre :: Int -> (Int,String) -> Int
+foldOre (ore,waste) x@(multiplier,educt) =
+ ((ore + reactionMultiplier * eductOre),
+  if wasteMultiplier /= 0
+   then ((wasteMultiplier,educt):eductWaste ++ waste)
+   else waste)
+ where
+  eductOreReaction = day14a_getOre educt
+  eductMultiplier = (\(a,b,c) -> a) eductOreReaction
+  eductOre = (\(a,b,c) -> b) eductOreReaction
+  eductWaste = (\(a,b,c) -> c) eductOreReaction
+  reactionMultiplier = ((div multiplier eductMultiplier) +
+                        if (mod (fromIntegral multiplier) (fromIntegral eductMultiplier) /= 0)
+                         then 1
+                         else 0)
+  wasteMultiplier = reactionMultiplier * eductMultiplier - multiplier
+
+data_day14a = Map.fromList reactionsWithProductKey
+ where
+  lines = splitOn ';' data_day14a_raw -- [String]
+  eductsProduct = map (splitOn '=') lines -- [[String]]
+  eductsList = foldr (\x acc -> (head x):acc) [] eductsProduct -- [String]
+  eductListList = map (splitOn ',') eductsList --[[String]]
+  eductListListTuple = map (map ((\(a:b:[]) -> ((read a :: Int),b)) . splitOn ' ')) eductListList
+  productList = foldr (\x acc -> (last x):acc) [] eductsProduct -- [String]
+  productListTuple = map ((\(a:b:[]) -> ((read a :: Int),b)) . splitOn ' ') productList -- [(Int,String)]
+  reactions = zip eductListListTuple productListTuple
+  reactionsWithProductKey = zip (map (snd) productListTuple) reactions
+  
+  
+{-
+unspool ';' -> lines
+
+unspool '=' lines -> (educts,product)
+
+unspool ',' educt -> [educt]
+
+unspool ' ' [educt],product -> number,element
+
+read number
+-}
