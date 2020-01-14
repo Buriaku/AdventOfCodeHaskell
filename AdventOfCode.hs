@@ -512,7 +512,7 @@ day11a_output = day11a_robot (cICC_init data_day11a) 0 0 [0] data_day11a_map (0,
 
 
 -- day11a_robot :: [Int] -> Int -> Int -> [Int] -> Map.Map (Int, Int) Int -> (Int, Int) -> Int -> (Map.Map (Int, Int) Int, ([Int], [Char], Int, Int, Int, [Int], [Int]))
-day11a_robot memory_old position_old relativeBase_old input map_old robotPosition_old@(x,y) robotFacing_old
+day11a_robot memoryOld positionOld relativeBaseOld input mapOld robotPositionOld@(x,y) robotFacingOld
  -- if halt then do next step
  | opCode == 3  = day11a_robot memory position relativeBase [mapColor] map robotPosition robotFacing                 
  -- if done ore error then end
@@ -521,7 +521,7 @@ day11a_robot memory_old position_old relativeBase_old input map_old robotPositio
 
  where
   -- do step
-  output_raw = cICC_output_raw memory_old position_old relativeBase_old input
+  output_raw = cICC_output_raw memoryOld positionOld relativeBaseOld input
   memory = (\(a,b,c,d,e,f,g) -> a) output_raw
   opCode = (\(a,b,c,d,e,f,g) -> c) output_raw
   position = (\(a,b,c,d,e,f,g) -> d) output_raw
@@ -533,11 +533,11 @@ day11a_robot memory_old position_old relativeBase_old input map_old robotPositio
   rotate = head output
   
   -- put color from output into map
-  mapColor_old = day11a_getColor map_old robotPosition_old
-  map = Map.insert robotPosition_old paintColor map_old
+  mapColorOld = day11a_getColor mapOld robotPositionOld
+  map = Map.insert robotPositionOld paintColor mapOld
          
   -- calculate robot movement
-  robotFacing = mod (robotFacing_old + 3 + 2 * rotate) 4
+  robotFacing = mod (robotFacingOld + 3 + 2 * rotate) 4
   robotPosition = case robotFacing of
                    0 -> (x,y-1)
                    1 -> (x+1,y)
@@ -674,7 +674,7 @@ day13b_print map =
   xmax = 42
   ymax = 22
 
-day13b_old input0 =
+day13bOld input0 =
  do
   io <- putStrLn (concat [[day13b_intToChar (map Map.! (x,y)) | x <- [0..xmax]] ++ "\n" | y <- [0..ymax]])
   print (map Map.! (-1,0))
@@ -815,3 +815,133 @@ day14b_calc multiplier = (totalOre - reducedSurplusOre,multiplier) --(totalOre,r
   surplus = Map.fromListWith (\a b -> a + b) (map (\(a,b) -> (b,a * multiplier)) ((\(a,b,c) -> c) output))
   moleculeList = Map.keys surplus
   reducedSurplusOre = reduceSurplus moleculeList surplus
+  
+-- Day 15a
+
+day15a = (day15b_output start (Map.singleton start 0) 0) Map.! (0,0)
+ where
+  start = Map.fromList (map (\(a,b) -> (b,a)) (Map.toList day15a_calc)) Map.! 2
+
+day15a_map =
+ do
+  io <- day15a_showMap day15a_calc
+  return ()
+ 
+day15a_showMap mapData =
+ do 
+  io <- mapM (putStrLn) (day15a_convertMap mapData)
+  return ()
+
+day15a_convertMap :: Map.Map (Int,Int) Int -> [String]
+day15a_convertMap mapData = map (map (day15a_intToChar)) [[Map.findWithDefault 3 (x,y) mapDataNew | x <- [xmin..xmax]] | y <- [ymin..ymax]]
+ where
+  keys = Map.keys mapData
+  xmin = minimum (map (\(a,b) -> a) keys)
+  xmax = maximum (map (\(a,b) -> a) keys)
+  ymin = minimum (map (\(a,b) -> b) keys)
+  ymax = maximum (map (\(a,b) -> b) keys)
+  mapDataNew = Map.insert (0,0) 4 mapData
+
+day15a_intToChar :: Int -> Char  
+day15a_intToChar n
+ | n == 0 = '#'
+ | n == 1 = '.'
+ | n == 2 = 'o'
+ | n == 3 = ' '
+ | n == 4 = 'x'
+ 
+day15a_calc = day15a_algorithm1 (cICC_init data_day15a) 0 0 [1] 0 (Map.fromList [((0,0),1)]) (0,0) 1 (0,0)
+
+day15a_algorithm1 memoryOld positionOld relativeBaseOld input phase mapDataOld robotPositionOld@(x,y) robotHeading firstWallOld
+ -- | length (Map.keys mapData) > 1000 = mapData
+ | phase == 0 = if firstWall==(0,0)
+                 then -- continue to robotHeading
+                  day15a_algorithm1 memory position relativeBase [robotHeading] phase mapData robotPosition robotHeading firstWall
+                 else
+                  if hitWall
+                   then -- turn right
+                    day15a_algorithm1 memory position relativeBase [turnRight] phase mapData robotPosition turnRight firstWall
+                   else -- turn left
+                    day15a_algorithm1 memory position relativeBase [turnLeft] phase mapData robotPosition turnLeft firstWall
+ | phase == 1 = mapData
+ | otherwise  = mapData
+
+ -- day15a_algorithm1 memory position relativeBase [direction] phase map robotPosition robotHeading -- lastWall
+
+ where
+  -- do step
+  output_raw = cICC_output_raw memoryOld positionOld relativeBaseOld input
+  memory = (\(a,b,c,d,e,f,g) -> a) output_raw
+  opCode = (\(a,b,c,d,e,f,g) -> c) output_raw
+  position = (\(a,b,c,d,e,f,g) -> d) output_raw
+  relativeBase = (\(a,b,c,d,e,f,g) -> e) output_raw
+  output = head ((\(a,b,c,d,e,f,g) -> g) output_raw)
+  robotPosition_next = case robotHeading of
+                        1 -> (x,y-1)
+                        2 -> (x,y+1)
+                        3 -> (x-1,y)
+                        4 -> (x+1,y)
+  mapData = Map.insert (robotPosition_next) output mapDataOld
+    
+  robotPosition = if output == 0
+                   then robotPositionOld
+                   else robotPosition_next
+                   
+  hitWall = if output == 0 then True else False
+  circledMap = if (mapData == mapDataOld && robotPosition_next == firstWallOld && robotHeading == 1) then True else False
+  
+  firstWall = if hitWall && firstWallOld == (0,0) then robotPosition_next else firstWallOld
+  
+  turnRight = case robotHeading of
+               1 -> 4
+               2 -> 3
+               3 -> 1
+               4 -> 2
+  
+  turnLeft  = case robotHeading of
+               4 -> 1
+               3 -> 2
+               1 -> 3
+               2 -> 4
+  
+  -- choose algorithm phase 
+  phase = if circledMap then 1 else 0
+  -- ... what a joke, eh?
+
+-- Day 15b
+day15b = maximum (Map.elems (day15b_output start (Map.singleton start 0) 0))
+ where
+  start = Map.fromList (map (\(a,b) -> (b,a)) (Map.toList day15a_calc)) Map.! 2
+
+day15b_output (x,y) distanceMap n = westMap
+
+ where
+  m = n + 1
+  mapData = day15a_calc
+  northTile = Map.findWithDefault (-1) (x,y-1) mapData
+  northVoid = distanceMap Map.!? (x,y-1) == Nothing
+  
+  northMap = if northTile > 0 && northVoid
+              then day15b_output (x,y-1) (Map.insert (x,y-1) m distanceMap) m
+              else distanceMap
+              
+  eastTile = Map.findWithDefault (-1) (x+1,y) day15a_calc
+  eastVoid = distanceMap Map.!? (x+1,y) == Nothing
+  
+  eastMap = if eastTile > 0 && eastVoid
+              then day15b_output (x+1,y) (Map.insert (x+1,y) m northMap) m
+              else northMap
+  
+  southTile = Map.findWithDefault (-1) (x,y+1) day15a_calc
+  southVoid = distanceMap Map.!? (x,y+1) == Nothing
+  
+  southMap = if southTile > 0 && southVoid
+              then day15b_output (x,y+1) (Map.insert (x,y+1) m eastMap) m
+              else eastMap
+  
+  westTile = Map.findWithDefault (-1) (x-1,y) day15a_calc
+  westVoid = distanceMap Map.!? (x-1,y) == Nothing
+  
+  westMap = if westTile > 0 && westVoid
+              then day15b_output (x-1,y) (Map.insert (x-1,y) m southMap) m
+              else southMap
