@@ -724,20 +724,45 @@ data_day13b = 2:(tail data_day13a)
 
 -- Day 14a
 
-day14a = (show totalOre) ++ " - " ++ (show redundantOre) ++ " = " ++ (show (totalOre - redundantOre))
+day14a = totalOre - reducedSurplusOre
  where
   output = day14a_getOre "FUEL"
   totalOre = (\(a,b,c) -> b) output
-  waste = Map.toList (Map.fromListWith (\a b -> a + b) (map (\(a,b) -> (b,a)) ((\(a,b,c) -> c) output)))
-  redundantOre = foldl (getRedundantOre) 0 waste
+  surplus = Map.fromListWith (\a b -> a + b) (map (\(a,b) -> (b,a)) ((\(a,b,c) -> c) output))
+  moleculeList = Map.keys surplus
+  
+  reducedSurplusOre = reduceSurplus moleculeList surplus
 
-getRedundantOre acc (product,wasteMultiplier) = acc + (div wasteMultiplier productMultiplier) * productOre
+reduceSurplus :: [String] -> Map.Map String Int -> Int
+reduceSurplus moleculeList surplus
+ | surplus == next_surplus = Map.findWithDefault 0 "ORE" surplus
+ | otherwise               = reduceSurplus (Map.keys next_surplus) next_surplus
  where
-  output = day14a_getOre product
-  productOre = (\(a,b,c) -> b) output
-  productMultiplier = (\(a,b,c) -> a) output
+  next_surplus = reduceSurplusOnce moleculeList surplus
 
--- day14a_getOre :: String -> (Int,Int)
+reduceSurplusOnce [] surplus = surplus
+reduceSurplusOnce molecules@("ORE":nextMolecules) surplus =
+ reduceSurplusOnce nextMolecules surplus
+reduceSurplusOnce molecules@(currentMolecule:nextMolecules) surplus =
+ reduceSurplusOnce nextMolecules nextSurplus
+ where
+  reaction = data_day14a Map.! currentMolecule
+  product = (\(a,b) -> b) reaction
+  educts = (\(a,b) -> a) reaction
+  
+  productSurplus = surplus Map.! currentMolecule
+  productMultiplier = (\(a,b) -> a) product
+  maxReactionMultiplier = div productSurplus productMultiplier
+  
+  -- remove product from surplus then add educts to surplus
+  prodSurplus = day14a_mapSum currentMolecule (-1 * maxReactionMultiplier * productMultiplier) surplus
+  nextSurplus = foldl (\acc (a,b) -> day14a_mapSum b (a * maxReactionMultiplier) acc) prodSurplus educts 
+  
+-- add or substract from value in map
+day14a_mapSum :: String -> Int -> Map.Map String Int -> Map.Map String Int
+day14a_mapSum key value map = Map.insert key (previous + value) map
+ where
+  previous = Map.findWithDefault 0 key map
 
 day14a_getOre "ORE" = (1,1,[])
 
@@ -748,21 +773,24 @@ day14a_getOre product = (\a (b,c) -> (a,b,c)) productMultiplier (foldl (foldOre)
   productMultiplier = fst (snd reaction)
 
 -- foldOre :: Int -> (Int,String) -> Int
-foldOre (ore,waste) x@(multiplier,educt) =
- ((ore + reactionMultiplier * eductOre),
-  if wasteMultiplier /= 0
-   then ((wasteMultiplier,educt):eductWaste ++ waste)
-   else waste)
+foldOre (oreAcc,surplusAcc) (eductNeeded,educt) =
+ ((oreAcc + reactionMultiplier * eductOre),nextSurplus)
  where
   eductOreReaction = day14a_getOre educt
-  eductMultiplier = (\(a,b,c) -> a) eductOreReaction
+  eductFromReaction = (\(a,b,c) -> a) eductOreReaction
   eductOre = (\(a,b,c) -> b) eductOreReaction
-  eductWaste = (\(a,b,c) -> c) eductOreReaction
-  reactionMultiplier = ((div multiplier eductMultiplier) +
-                        if (mod (fromIntegral multiplier) (fromIntegral eductMultiplier) /= 0)
-                         then 1
-                         else 0)
-  wasteMultiplier = reactionMultiplier * eductMultiplier - multiplier
+  eductSurplus = (\(a,b,c) -> c) eductOreReaction
+  reactionMultiplier = div_ceiling eductNeeded eductFromReaction
+  reactionSurplus = (reactionMultiplier * eductFromReaction) - eductNeeded
+  eductSurplusMultiplied = map (\(a,b) -> ((a * reactionMultiplier),b)) eductSurplus
+  nextSurplus = case reactionSurplus of
+                 0         -> eductSurplusMultiplied ++ surplusAcc
+                 otherwise -> (reactionSurplus,educt):eductSurplusMultiplied ++ surplusAcc
+
+div_ceiling a b = ceiling (c / d)
+ where
+  c = fromIntegral a
+  d = fromIntegral b
 
 data_day14a = Map.fromList reactionsWithProductKey
  where
@@ -776,15 +804,14 @@ data_day14a = Map.fromList reactionsWithProductKey
   reactions = zip eductListListTuple productListTuple
   reactionsWithProductKey = zip (map (snd) productListTuple) reactions
   
-  
-{-
-unspool ';' -> lines
+-- Day 14b
 
-unspool '=' lines -> (educts,product)
+day14b = last (takeWhile (\(a,b) -> a < 1000000000000) [day14b_calc n | n <- [3060000..]])
 
-unspool ',' educt -> [educt]
-
-unspool ' ' [educt],product -> number,element
-
-read number
--}
+day14b_calc multiplier = (totalOre - reducedSurplusOre,multiplier) --(totalOre,reducedSurplusOre,(totalOre - reducedSurplusOre))
+ where
+  output = day14a_getOre "FUEL"
+  totalOre = ((\(a,b,c) -> b) output) * multiplier
+  surplus = Map.fromListWith (\a b -> a + b) (map (\(a,b) -> (b,a * multiplier)) ((\(a,b,c) -> c) output))
+  moleculeList = Map.keys surplus
+  reducedSurplusOre = reduceSurplus moleculeList surplus
