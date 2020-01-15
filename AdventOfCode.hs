@@ -945,3 +945,43 @@ day15b_output (x,y) distanceMap n = westMap
   westMap = if westTile > 0 && westVoid
               then day15b_output (x-1,y) (Map.insert (x-1,y) m southMap) m
               else southMap
+              
+-- Day 16a
+
+day16a = intListToInt (take 8 (last (take 100 (day16a_calc data_day16a))))
+
+day16a_calc list = newList:(day16a_calc newList)
+ where
+  newList = day16a_step list
+  
+day16a_step list = [mod10abs (foldl (\acc (x,value) -> acc + (day16a_matrix ! (x,y)) * value) 0 (zip [y..day16a_max] (drop y list)))| y <- [0..day16a_max]]
+
+mod10abs n = mod (abs n) 10
+
+day16a_matrix = array ((0,0),(day16a_max,day16a_max)) [((x,y),([0,1,0,(-1)] !! (mod (div (x + 1) (y + 1)) 4))) | y <- [0..day16a_max], x <- [0..day16a_max]]
+
+day16a_max = (length data_day16a) - 1
+
+intListToInt list = read (concat . map show $ list) :: Int
+
+-- Day 16b
+
+day16b = intListToInt (take 8 (drop day16b_offset (last day16b_output)))
+
+day16b_offset = intListToInt (take 7 data_day16a)
+
+day16b_output = take 100 (day16b_calc data_day16b)
+
+day16b_calc list = newList:(day16b_calc newList)
+ where
+  newList = day16b_step list
+
+day16b_step list = [mod10abs (foldl (\acc (x,value) -> acc + (day16b_matrix ! (x,y)) * value) 0 (zip [y..day16b_max] (drop y list)))| y <- [0..day16b_max]]
+
+day16b_matrix = array ((0,0),(day16b_max,day16b_max)) [((x,y),([0,1,0,(-1)] !! (mod (div (x + 1) (y + 1)) 4))) | y <- [0..day16b_max], x <- [0..day16b_max]]
+
+data_day16b = concat (replicate day16b_multiplicator data_day16a)
+
+day16b_max = day16a_max * day16b_multiplicator
+
+day16b_multiplicator = 10000
