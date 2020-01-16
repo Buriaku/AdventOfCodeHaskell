@@ -1,5 +1,7 @@
 import Data.List
 import Data.Array
+import Data.Foldable
+import Data.Char
 import qualified Data.Map as Map
 import AdventOfCodeData
 
@@ -948,40 +950,108 @@ day15b_output (x,y) distanceMap n = westMap
               
 -- Day 16a
 
-day16a = intListToInt (take 8 (last (take 100 (day16a_calc data_day16a))))
+day16a = intListToInt (take 8 day16a_output)
 
-day16a_calc list = newList:(day16a_calc newList)
- where
-  newList = day16a_step list
+day16a_output = day16a_calc data_day16a 100
+
+day16a_calc list 0 = list
+day16a_calc list n = day16a_calc (day16a_step list) (n-1)
   
-day16a_step list = [mod10abs (foldl (\acc (x,value) -> acc + (day16a_matrix ! (x,y)) * value) 0 (zip [y..day16a_max] (drop y list)))| y <- [0..day16a_max]]
+day16a_step [] = []
+day16a_step list@(_:shortList) = (mod10abs (day16a_line n (spoolList (4*n) list))):(day16a_step shortList)
+ where
+  n = day16a_length - (length list) + 1
+
+day16a_line :: Int -> [[Int]] -> Int
+day16a_line n listList = foldl' (\acc list -> acc + day16a_sum (spoolList n list)) 0 listList
+
+day16a_sum (a:_:c:_) = sum a - sum c
+day16a_sum (a:_) = sum a
+
+day16a_length = length data_day16a
 
 mod10abs n = mod (abs n) 10
-
-day16a_matrix = array ((0,0),(day16a_max,day16a_max)) [((x,y),([0,1,0,(-1)] !! (mod (div (x + 1) (y + 1)) 4))) | y <- [0..day16a_max], x <- [0..day16a_max]]
-
-day16a_max = (length data_day16a) - 1
 
 intListToInt list = read (concat . map show $ list) :: Int
 
 -- Day 16b
 
-day16b = intListToInt (take 8 (drop day16b_offset (last day16b_output)))
+day16b = intListToInt (take 8 day16b_output)
+
+day16b_output = day16b_calc data_day16b 100
+
+day16b_calc list 0 = list
+day16b_calc list n = day16b_calc (day16b_step list) (n-1)
+
+day16b_step [n] = [n]
+day16b_step (n:shortList) = (mod (n + acc) 10):(newList)
+ where
+  newList= day16b_step shortList
+  acc = head newList
+
+
+data_day16b = drop offsetDrop (concat (replicate replication data_day16a))
+ where
+  listLength = day16a_length * day16b_multiplicator - day16b_offset
+  replication = div_ceiling listLength day16a_length
+  offsetDrop = replication * day16a_length - listLength
+  
+
+
+day16b_length = (day16a_length * day16b_multiplicator) - day16b_offset
 
 day16b_offset = intListToInt (take 7 data_day16a)
 
-day16b_output = take 100 (day16b_calc data_day16b)
-
-day16b_calc list = newList:(day16b_calc newList)
- where
-  newList = day16b_step list
-
-day16b_step list = [mod10abs (foldl (\acc (x,value) -> acc + (day16b_matrix ! (x,y)) * value) 0 (zip [y..day16b_max] (drop y list)))| y <- [0..day16b_max]]
-
-day16b_matrix = array ((0,0),(day16b_max,day16b_max)) [((x,y),([0,1,0,(-1)] !! (mod (div (x + 1) (y + 1)) 4))) | y <- [0..day16b_max], x <- [0..day16b_max]]
-
-data_day16b = concat (replicate day16b_multiplicator data_day16a)
-
-day16b_max = day16a_max * day16b_multiplicator
-
 day16b_multiplicator = 10000
+
+-- main = print (day16b_calc data_day16b 1) -- (intListToInt (take 8 day16b_output))
+
+-- Day 17a
+
+day17a = foldl (\acc (x,y) -> acc + x * y) 0 intersections
+ where
+ intersections = [(x,y) |
+                  y <- [0..(day17a_yLength - 1)],
+                  x <- [0..(day17a_xLength - 1)],
+                  Map.findWithDefault ' ' (x,y) day17a_map == '#',
+                  Map.findWithDefault ' ' (x+1,y) day17a_map == '#',
+                  Map.findWithDefault ' ' (x-1,y) day17a_map == '#',
+                  Map.findWithDefault ' ' (x,y+1) day17a_map == '#',
+                  Map.findWithDefault ' ' (x,y-1) day17a_map == '#']
+
+day17a_map = Map.fromList day17a_assocList
+
+day17a_assocList = zip [(x,y) | y <- [0..(yLength - 1)], x <- [0..(xLength - 1)]] (concat field)
+ where
+  xLength = day17a_xLength
+  yLength = day17a_xLength
+  field = day17a_field
+
+day17a_xLength = length (head day17a_field)
+day17a_yLength = length day17a_field 
+day17a_field = lines day17a_output
+
+day17a_showMap =
+ do
+  io <- putStr day17a_output
+  return ()
+
+day17a_output = map (chr) output
+ where
+  output = reverse ((\(a,b,c,d,e,f,g) -> g) day17a_calc)
+
+day17a_calc = cICC_output_raw (cICC_init data_day17a) 0 0 []
+
+-- Day 17b
+
+day17b = head day17b_output
+
+day17b_output = output
+ where
+  output = ((\(a,b,c,d,e,f,g) -> g) day17b_calc)
+
+day17b_calc = cICC_output_raw (cICC_init data_day17b) 0 0 day17b_solution
+
+data_day17b = 2:(tail data_day17a)
+
+day17b_solution = map (ord) "A,A,B,C,B,C,B,C,A,C\nR,6,L,8,R,8\nR,4,R,6,R,6,R,4,R,4\nL,8,R,6,L,10,L,10\nn\n"
