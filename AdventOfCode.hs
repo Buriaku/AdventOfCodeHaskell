@@ -4,6 +4,7 @@ import Data.Foldable
 import Data.Char
 import qualified Data.Map as Map
 import AdventOfCodeData
+import AdventOfCodeDataOld
 
 
 --Day 01a
@@ -1055,3 +1056,175 @@ day17b_calc = cICC_output_raw (cICC_init data_day17b) 0 0 day17b_solution
 data_day17b = 2:(tail data_day17a)
 
 day17b_solution = map (ord) "A,A,B,C,B,C,B,C,A,C\nR,6,L,8,R,8\nR,4,R,6,R,6,R,4,R,4\nL,8,R,6,L,10,L,10\nn\n"
+
+-- Day 18a
+
+--   Path = Place Type Position  [(next Place, distance)])
+data Path = Place Char (Int,Int) [(Path, Int)] deriving (Show, Eq)
+
+day18a_output = day18a_possibleKeys [] day18a_start
+
+day18a_possibleKeys keys pos = 
+ where
+  remainingKeys = [a..z] \\ keys
+  remainingKeyPositions = map (data_day18a_inverse Map.!) remainingKeys
+  keyPaths = map (day18_shortestPath keys pos) remainingKeyPositions
+
+day18a_shortestPath keys pos1 pos2 =
+ getShortestPath keys pos1 pos2 [([pos1],0)] [([pos1],0)]
+ where
+  getShortestPath :: [Char] -> (Int,Int) -> (Int,Int) -> [([(Int,Int)],Int)]
+  getShortestPath keys pos1 pos2 pathList1 pathList2
+   | intersect path1positions path2positions /= [] ->
+    
+   | snd (head pathList1sorted) <= snd (head pathList2sorted) ->
+    
+   | otherwise ->
+    
+   where
+    pathList1sorted =
+     dropWhile (\(a,b) -> b < 0)
+      (sortWith (\(a,b) (c,d) -> compare b d) pathList1)
+    pathList2sorted =
+     dropWhile (\(a,b) -> b < 0)
+      (sortWith (\(a,b) (c,d) -> compare b d) pathList2)
+    path1positions = concat (map fst pathList1)
+    path2positions = concat (map fst pathList2)
+    headPath1options =
+     [pos | pos <- (day18a_connectionMap Map.! pos1),
+      notElem pos path1positions]
+    headPath2options =
+     [pos | pos <- (day18a_connectionMap Map.! pos2),
+      notElem pos path2positions]
+
+day18a_connectionMap :: Map.Map (Int,Int) [((Int,Int),Int)]
+day18a_connectionMap = connectionMap
+ where
+  connections = getConnections day18a_traverse
+  reverse_connections = map (\(a,b,c) -> (b,a,c)) connections
+  condensedList = nub (connections ++ reverse_connections)
+  assocList = map (\(a,b,c) -> (a,[(b,c)])) condensedList
+  connectionMap = Map.fromListWith (\a b -> a ++ b) assocList
+  
+  getConnections (Place a b c) = fullList
+   where
+    localList = foldr (\((Place d e f),g) acc -> (b,e,g):acc) [] c
+    fullList = localList ++ concat (map (\(a,b) -> getConnections a) c) 
+    
+
+day18a_traverse = (\(a,b) -> a) (day18a_checkPlace start [start,start])
+ where
+  start = day18a_start
+
+day18a_start = data_day18a_inverse Map.! '@'
+
+day18a_checkPlace :: (Int,Int) -> [(Int,Int)] -> (Path,[(Int,Int)])
+day18a_checkPlace pos@(x,y) posList@(_:lastPlace:_)
+ | placeListEnd /= placeListWest =
+  ((fst (head placeListEnd)),posListWest)
+ | otherwise                     =
+  ((Place char pos placeListEnd),posListWest)
+ where
+  char = data_day18a Map.! pos
+   
+  northPath = day18a_checkPath (x,y-1) pos posList --checkNorthPath
+  northDistance = (\(a,b,c) -> b) northPath
+  posListNorth = (\(a,b,c) -> c) northPath
+  north = (\(a,b,c) -> (a,b)) northPath
+  northPos = (\((Place d e f),b,c) -> e) northPath
+  
+  eastPath = day18a_checkPath (x+1,y) pos posListNorth  --checkEast
+  eastDistance = (\(a,b,c) -> b) eastPath
+  posListEast = (\(a,b,c) -> c) eastPath
+  east = (\(a,b,c) -> (a,b)) eastPath
+  eastPos = (\((Place d e f),b,c) -> e) eastPath
+  
+  southPath = day18a_checkPath (x,y+1) pos posListEast  --checkSouth
+  southDistance = (\(a,b,c) -> b) southPath
+  posListSouth = (\(a,b,c) -> c) southPath
+  south = (\(a,b,c) -> (a,b)) southPath
+  southPos = (\((Place d e f),b,c) -> e) southPath
+  
+  westPath = day18a_checkPath (x-1,y) pos posListSouth  --checkWest
+  westDistance = (\(a,b,c) -> b) westPath
+  posListWest = (\(a,b,c) -> c) westPath
+  west = (\(a,b,c) -> (a,b)) westPath
+  westPos = (\((Place d e f),b,c) -> e) westPath
+  
+  placeListNorth = if northDistance > 0 && northPos /= lastPlace
+                    then north:[]
+                    else []
+                    
+  placeListEast  = if eastDistance > 0 && eastPos /= lastPlace
+                    then east:placeListNorth
+                    else placeListNorth
+                    
+  placeListSouth = if southDistance > 0 && southPos /= lastPlace
+                    then south:placeListEast
+                    else placeListEast
+                    
+  placeListWest  = if westDistance > 0 && westPos /= lastPlace
+                    then west:placeListSouth
+                    else placeListSouth
+  
+  -- not too lazy to remove empty-2-exit-nodes :O
+  -- get the distance to singleton path
+  singleDistance
+   | placeListWest == [north] = northDistance 
+   | placeListWest == [east]  = eastDistance 
+   | placeListWest == [south] = southDistance 
+   | placeListWest == [west]  = westDistance 
+   | otherwise                = 0
+  
+  -- change distance of singleton place (will be used in output above)
+  placeListEnd =
+   if length placeListWest == 1 && char == '.'
+    then
+     (\[(a,d)] -> [(a,d + singleDistance)]) placeListWest
+    else placeListWest
+
+
+day18a_checkPath :: (Int,Int) -> (Int,Int) -> [(Int,Int)] -> (Path,Int,[(Int,Int)])
+day18a_checkPath pos@(x,y) oldPos posList
+ | char == '#'          = (Place char pos [], 0, posList)
+ | length pathList == 0 = if char == '.'
+                           then (Place char pos [], 0, posList)
+                           else (Place char pos [], 1, pos:posList)
+ | length pathList == 1 && char == '.' = 
+  (\(a,b,c) ->
+   if b /= 0 -- && not ((\(Place a b c) -> a == '.' && c == []) a)
+    then (a,b+1,c)
+    else (a,0,c))
+   (day18a_checkPath (fst (head pathList)) pos posList)
+ | elem pos posList     = (Place char pos [], 1, posList) 
+ | otherwise            = (\(a,b) -> (a,1,b)) (day18a_checkPlace pos (pos:posList))
+ where
+  char = data_day18a Map.! pos
+  north = (x,y-1)
+  northChar = data_day18a Map.! north
+  east = (x+1,y)
+  eastChar = data_day18a Map.! east
+  south = (x,y+1)
+  southChar = data_day18a Map.! south
+  west = (x-1,y)
+  westChar = data_day18a Map.! west
+  
+  pathList :: [((Int,Int),Char)]
+  pathList = foldr
+              (\(a,b) acc -> if a /= oldPos && b/='#' then (a,b):acc else acc) []
+              (zip
+               [north,east,south,west]
+               [northChar,eastChar,southChar,westChar])
+
+data_day18a_inverse = Map.fromList (map (\(a,b) -> (b,a)) data_day18a_assocList)
+data_day18a = Map.fromList data_day18a_assocList
+data_day18a_assocList = zip
+                         [(x,y) | y <- [0..day18a_yMax], x <- [0..day18a_xMax]]
+                         (concat data_day18a_split)
+
+day18a_xMax = (length (head data_day18a_split)) - 1
+day18a_yMax = (length data_day18a_split) - 1
+day18a_xLength = length (head data_day18a_split)
+day18a_yLength = length data_day18a_split
+
+data_day18a_split = splitOn ';' data_day18a_raw
