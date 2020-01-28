@@ -2,7 +2,9 @@ import Data.List
 import Data.Array
 import Data.Foldable
 import Data.Char
+import Data.Maybe
 import qualified Data.Map as Map
+
 import AdventOfCodeData
 import AdventOfCodeDataOld
 
@@ -556,7 +558,7 @@ day11a_getColor :: Map.Map (Int, Int) Int -> (Int,Int) -> Int
 day11a_getColor map p = case color of
                          Just a  -> a
                          Nothing -> 0
- where color = map Map.!? p
+ where color = Map.lookup p map
 
 -- Day 11b
 
@@ -711,7 +713,7 @@ day13b_output_auto intMap input
   intMap_new = (\(a,b,c,d,e,f,g) -> a) calc_output
   opCode = (\(a,b,c,d,e,f,g) -> c) calc_output
     
-  block = inverseMap Map.!? 1 
+  block = Map.lookup 1 inverseMap  
   ball = inverseMap Map.! 4
   ball_x = (\(a,b) -> a) ball
   paddle = inverseMap Map.! 3
@@ -922,28 +924,28 @@ day15b_output (x,y) distanceMap n = westMap
   m = n + 1
   mapData = day15a_calc
   northTile = Map.findWithDefault (-1) (x,y-1) mapData
-  northVoid = distanceMap Map.!? (x,y-1) == Nothing
+  northVoid = Map.lookup (x,y-1) distanceMap == Nothing
   
   northMap = if northTile > 0 && northVoid
               then day15b_output (x,y-1) (Map.insert (x,y-1) m distanceMap) m
               else distanceMap
               
   eastTile = Map.findWithDefault (-1) (x+1,y) day15a_calc
-  eastVoid = distanceMap Map.!? (x+1,y) == Nothing
+  eastVoid = Map.lookup (x+1,y) distanceMap == Nothing
   
   eastMap = if eastTile > 0 && eastVoid
               then day15b_output (x+1,y) (Map.insert (x+1,y) m northMap) m
               else northMap
   
   southTile = Map.findWithDefault (-1) (x,y+1) day15a_calc
-  southVoid = distanceMap Map.!? (x,y+1) == Nothing
+  southVoid =  Map.lookup (x,y+1) distanceMap == Nothing
   
   southMap = if southTile > 0 && southVoid
               then day15b_output (x,y+1) (Map.insert (x,y+1) m eastMap) m
               else eastMap
   
   westTile = Map.findWithDefault (-1) (x-1,y) day15a_calc
-  westVoid = distanceMap Map.!? (x-1,y) == Nothing
+  westVoid = Map.lookup (x-1,y) distanceMap == Nothing
   
   westMap = if westTile > 0 && westVoid
               then day15b_output (x-1,y) (Map.insert (x-1,y) m southMap) m
@@ -1062,40 +1064,294 @@ day17b_solution = map (ord) "A,A,B,C,B,C,B,C,A,C\nR,6,L,8,R,8\nR,4,R,6,R,6,R,4,R
 --   Path = Place Type Position  [(next Place, distance)])
 data Path = Place Char (Int,Int) [(Path, Int)] deriving (Show, Eq)
 
-day18a_output = day18a_possibleKeys [] day18a_start
+-- LabBranch lock entrancePos [branchList] directContent totalContent
+-- LabLeaf lock entrancePos directContent
 
-day18a_possibleKeys keys pos = 
+data LabTree = LabStem Char (Int,Int) String String [LabTree] | LabBranch Char (Int,Int) String String [LabTree] {-| LabLeaf Char (Int,Int) String-} deriving (Show, Eq)
+
+-- main = print (day18a_shortestPath keys (data_day18a_inverse Map.! 'a') (data_day18a_inverse Map.! '@'))
+
+day18a_output = day18a_calc day18a_start 0 []
+
+day18a_calc pos length keys 
+ | all (`elem` keys) day18a_keys =
+   [(length,keys)]
+ | otherwise                    =
+  concat (map (\(a,b,c) -> day18a_calc a (length + b) (c:keys)) possiblePaths)
  where
-  remainingKeys = [a..z] \\ keys
+  possibleKeys = day18a_possibleKeys keys
+  possibleKeyPositions = map (data_day18a_inverse Map.!) possibleKeys
+  openLocks = intersect day18a_locks (map toUpper keys)
+  openLockPos = map (data_day18a_inverse Map.!) openLocks
+  
+  keyPaths =
+   zip (map (\a -> day18a_shortestPathMap Map.! (pos,a))
+        possibleKeyPositions) possibleKeys
+  
+  possiblePathsUnsorted =
+   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
+    | x <- keyPaths, (fst x) /= Nothing]
+
+  possiblePaths = sortBy (\(a,b,c) (d,e,f) -> compare b e) possiblePathsUnsorted
+
+day18a_shortestPathMap = Map.fromList [((x,y),(day18a_shortestPath lockPos x y)) | x <- keyPos, y <- keyPos, x /= y]
+ where
+  lockPos = map (data_day18a_inverse Map.!) day18a_locks 
+  keyPos = day18a_start:(map (data_day18a_inverse Map.!) day18a_keys)
+  
+day18a_totalNeededKeys = zip day18a_keys neededKeyList_sorted
+ where
+  neededKeyList_raw = map getTotalNeededKeys day18a_keys
+  neededKeyList_nubbed = map nub neededKeyList_raw
+  neededKeyList_sorted = map sort neededKeyList_nubbed
+  
+  getTotalNeededKeys :: Char -> String
+  getTotalNeededKeys char = concat (map getTotalNeededKeys neededKeys) ++ neededKeys
+   where
+    neededKeys = map toLower (day18a_locksOnKey Map.! char)
+    
+
+
+day18a_locksOnKey = Map.fromList (zip day18a_keys (map getLocksBefore (map (data_day18a_inverse Map.!) day18a_keys)))
+ where
+  getLocksBefore (-1,-1) = []
+  getLocksBefore pos =
+   if isUpper char
+    then char:list
+    else list
+   where
+    mapElem = day18a_labTreeMap Map.! pos
+    tree = fst mapElem
+    parent = snd mapElem
+    char = (\(LabBranch a b c d e) -> a) tree
+    list = getLocksBefore parent
+
+day18a_labTreeMap = Map.unions (map (getLabTreeMap (-1,-1)) day18a_labTree)
+ where  
+  getLabTreeMap parent x@(LabBranch a b c d e) = Map.insert b (x,parent) treeMap
+   where
+    treeMap = Map.unions (map (getLabTreeMap b) e)
+
+day18a_labTree = map stemToTree (day18a_buildLabTree day18a_traverse)
+ where
+  stemToTree (LabStem a b c d e) = LabBranch a b c d e
+  stemToTree x = x
+
+day18a_possibleKeys keys = possibleKeys
+ where
+  remainingKeys = day18a_keys \\ keys
+  openLocks = intersect day18a_locks (map toUpper keys)
+  possibleKeys = intersect remainingKeys (concat (map getPossibleKeys day18a_labTree))
+  
+  getPossibleKeys (LabBranch a _ _ _ []) = [a]
+  getPossibleKeys (LabBranch a _ _ _ e) = a:list
+   where
+    openBranches = [x | x@(LabBranch f _ _ _ _) <- e, (not (isUpper f) || elem f openLocks)]
+    list = concat (map getPossibleKeys openBranches)
+
+day18a_buildLabTree :: Path -> [LabTree]
+day18a_buildLabTree (Place char pos placeList)
+ | elem pos day18a_circleLinks = 
+  (map (\(LabBranch a b c d e) -> LabStem a b c d e) branches) ++ stems -- convert higher branches to stems
+ | placeList == [] = -- leaf
+  (LabBranch char pos [] [] []):stems
+ | otherwise = -- branch
+  (LabBranch char pos direct total branches):stems
+ where
+  tree = concat (map (\a -> day18a_buildLabTree (fst a)) placeList)
+  stems = [x | x@(LabStem a b c d e) <- tree]
+  branches = tree \\ stems
+  direct = sort (filter (/='.') (map (\(LabBranch a b c d e) -> a) branches))
+  total = sort (concat (map (\(LabBranch a b c d e) -> d) branches) ++ direct)
+  
+
+-- LabBranch char entrancePos [branchList] directContent totalContent
+-- LabLeaf char entrancePos directContent  
+
+day18a_circleLinks = circlePos
+ where
+  posList = getPos day18a_traverse
+  groupedPosList = group (sort posList)
+  circlePos = [head x | x <- groupedPosList, length x > 1]
+  
+  getPos (Place _ pos []) = [pos]
+  getPos (Place _ pos list) = pos:(concat (map (\a -> getPos(fst (a))) list))
+ 
+day18a_possibleKeys' keys pos = possibleKeys
+ where
+  remainingKeys = day18a_keys \\ keys
   remainingKeyPositions = map (data_day18a_inverse Map.!) remainingKeys
-  keyPaths = map (day18_shortestPath keys pos) remainingKeyPositions
-
-day18a_shortestPath keys pos1 pos2 =
- getShortestPath keys pos1 pos2 [([pos1],0)] [([pos1],0)]
+  openLocks = intersect day18a_locks (map toUpper keys)
+  openLockPos = map (data_day18a_inverse Map.!) openLocks
+  keyPaths =
+   zip (map (day18a_shortestPath openLockPos pos)
+        remainingKeyPositions) remainingKeys
+  possibleKeys =
+   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
+    | x <- keyPaths, (fst x) /= Nothing]
+    
+day18a_possibleLocks keys pos = possibleLocks
  where
-  getShortestPath :: [Char] -> (Int,Int) -> (Int,Int) -> [([(Int,Int)],Int)]
-  getShortestPath keys pos1 pos2 pathList1 pathList2
-   | intersect path1positions path2positions /= [] ->
-    
-   | snd (head pathList1sorted) <= snd (head pathList2sorted) ->
-    
-   | otherwise ->
-    
+  remainingLocks = day18a_locks \\ (map toUpper keys)
+  remainingLockPositions = map (data_day18a_inverse Map.!) remainingLocks
+  openLocks = intersect day18a_locks (map toUpper keys)
+  openLockPos = map (data_day18a_inverse Map.!) openLocks
+  lockPaths =
+   zip (map (day18a_shortestPath openLockPos pos)
+        remainingLockPositions) remainingLocks
+  possibleLocks =
+   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
+    | x <- lockPaths, (fst x) /= Nothing]
+
+day18a_shortestPath :: [(Int,Int)] -> (Int,Int) -> (Int,Int) -> Maybe ([(Int,Int)],Int)
+day18a_shortestPath openLockPos pos1 pos2 =
+ getShortestPath openLockPos [([pos1],0)] [([pos2],0)]
+ where
+  getShortestPath :: [(Int,Int)] -> [([(Int,Int)],Int)] -> [([(Int,Int)],Int)] -> Maybe ([(Int,Int)],Int)
+  getShortestPath openLockPos pathList1 pathList2
+   | pathList1sorted == [] || pathList2sorted == [] =
+    Nothing
+   | pathPositionsIntersect /= [] =
+    finishShortestPath openLockPos pathList1 pathList2
+   | snd path1head <= snd path2head =
+    getShortestPath openLockPos pathList1updated pathList2
+   | otherwise =
+    getShortestPath openLockPos pathList1 pathList2updated
    where
     pathList1sorted =
      dropWhile (\(a,b) -> b < 0)
-      (sortWith (\(a,b) (c,d) -> compare b d) pathList1)
+      (sortBy (\(a,b) (c,d) -> compare b d) pathList1)
     pathList2sorted =
      dropWhile (\(a,b) -> b < 0)
-      (sortWith (\(a,b) (c,d) -> compare b d) pathList2)
+      (sortBy (\(a,b) (c,d) -> compare b d) pathList2)
+    path1head = head pathList1sorted
+    path2head = head pathList2sorted
+    pos1 = head (fst path1head)
+    pos2 = head (fst path2head)
     path1positions = concat (map fst pathList1)
     path2positions = concat (map fst pathList2)
-    headPath1options =
-     [pos | pos <- (day18a_connectionMap Map.! pos1),
-      notElem pos path1positions]
-    headPath2options =
-     [pos | pos <- (day18a_connectionMap Map.! pos2),
-      notElem pos path2positions]
+    pathPositionsIntersect = intersect path1positions path2positions
+       
+    pos1options =
+     [conn | conn <- (day18a_connectionMap Map.! pos1),
+      notElem (fst conn) (fst path1head),
+      (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
+       || elem (fst conn) openLockPos)] -- check for keys
+    pos2options =
+     [conn | conn <- (day18a_connectionMap Map.! pos2),
+      notElem (fst conn) (fst path2head),
+      (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
+       || elem (fst conn) openLockPos)] -- check for keys
+    pathList1snubbed = delete path1head pathList1
+    pathList2snubbed = delete path2head pathList2
+    
+    -- dead ends get -1
+    pathList1updated =
+     if pos1options /= []
+      then
+       foldr (\(a,b) acc -> 
+        (a:(fst path1head),b + (snd path1head)):acc)
+        [] pos1options ++ pathList1snubbed
+      else
+       ((\(a,b) -> (a,-1)) path1head):pathList1snubbed
+    pathList2updated = 
+     if pos2options /= []
+      then
+       foldr (\(a,b) acc ->
+        (a:(fst path2head),b + (snd path2head)):acc)
+        [] pos2options ++ pathList2snubbed
+      else
+       ((\(a,b) -> (a,-1)) path2head):pathList2snubbed
+       
+  finishShortestPath openLockPos pathList1 pathList2 = output
+   where
+    pathList1sorted =
+     dropWhile (\(a,b) -> b < 0)
+      (sortBy (\(a,b) (c,d) -> compare b d) pathList1)
+    pathList2sorted =
+     dropWhile (\(a,b) -> b < 0)
+      (sortBy (\(a,b) (c,d) -> compare b d) pathList2)
+    -- path1positions = concat (map fst pathList1)
+    -- path2positions = concat (map fst pathList2)
+    path1sortedPositions = concat (map fst pathList1sorted)
+    path2sortedPositions = concat (map fst pathList2sorted)
+    
+    shortestIntersectPos =
+     head (intersect path1sortedPositions path2sortedPositions)
+    
+    path1intersected =
+     take 1 [path | path <- pathList1sorted, elem shortestIntersectPos (fst path)]
+    path2intersected =
+     take 1 [path | path <- pathList2sorted, elem shortestIntersectPos (fst path)]
+    
+    path1minLength = snd (head path1intersected)
+    path2minLength = snd (head path2intersected)
+     
+    pathList1long =
+     dropWhile (\(a,b) -> b < path1minLength) pathList1sorted
+    pathList2long =
+     dropWhile (\(a,b) -> b < path2minLength) pathList2sorted
+     
+    pathList1short =
+     takeWhile (\(a,b) -> b < path1minLength) pathList1sorted
+    pathList2short =
+     takeWhile (\(a,b) -> b < path2minLength) pathList2sorted
+    
+    pathList1notShort =
+     concat (map (fillOutPath openLockPos path1minLength) pathList1short)
+    pathList2notShort =
+     concat (map (fillOutPath openLockPos path2minLength) pathList2short)
+     
+    pathList1updated = pathList1long ++ pathList1notShort
+    pathList2updated = pathList2long ++ pathList2notShort
+    
+    path1updatedPositions = concat (map fst pathList1)
+    path2updatedPositions = concat (map fst pathList2)
+    pathUpdatedPositionsIntersect = nub (intersect path1updatedPositions path2updatedPositions)
+    
+    remainingPaths1 =
+     foldr
+      (\x acc -> head (sortBy (\(a,b) (c,d) -> compare b d)
+       [y | y <- pathList1updated, elem x (fst y)]):acc) [] pathUpdatedPositionsIntersect
+    remainingPaths2 =
+     foldr
+      (\x acc -> head (sortBy (\(a,b) (c,d) -> compare b d)
+       [y | y <- pathList2updated, elem x (fst y)]):acc) [] pathUpdatedPositionsIntersect
+       
+    output =
+     Just (head
+      (sortBy (\(a,b) (c,d) -> compare b d)
+       (foldr (\((a,b),(c,d)) acc -> ((reverse a) ++ (tail c),b + d):acc) []
+        (zip remainingPaths1 remainingPaths2))))
+    
+  fillOutPath openLockPos minLength path = list
+   where
+    -- get options
+    pathPos = fst path
+    length = snd path
+    pos = head pathPos
+    options =
+     [conn | conn <- (day18a_connectionMap Map.! pos),
+      notElem (fst conn) pathPos,
+      (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
+       || elem (fst conn) openLockPos)] -- check for keys
+       
+    -- dead ends get -1
+    newPaths = if options == []
+                then
+                 [(pathPos,-1)]
+                else
+                 foldr (\(a,b) acc -> (a:pathPos,b + length):acc) [] options
+              
+    -- check options for length (dead ends are long enough)
+    newPathsLong = [x | x <- newPaths, (snd x) < 0 || (snd x) >= minLength]
+    newPathsShort = newPaths \\ newPathsLong
+    
+    -- recursive longer for short
+    newPathsNotShort =
+     foldr (\x acc -> (fillOutPath openLockPos minLength x) ++ acc) [] newPathsShort 
+    
+    list = newPathsNotShort ++ newPathsLong
 
 day18a_connectionMap :: Map.Map (Int,Int) [((Int,Int),Int)]
 day18a_connectionMap = connectionMap
@@ -1112,40 +1368,44 @@ day18a_connectionMap = connectionMap
     fullList = localList ++ concat (map (\(a,b) -> getConnections a) c) 
     
 
-day18a_traverse = (\(a,b) -> a) (day18a_checkPlace start [start,start])
+day18a_traverse = (\(a,b) -> a) (day18a_checkPlace start start [start])
  where
   start = day18a_start
 
 day18a_start = data_day18a_inverse Map.! '@'
 
-day18a_checkPlace :: (Int,Int) -> [(Int,Int)] -> (Path,[(Int,Int)])
-day18a_checkPlace pos@(x,y) posList@(_:lastPlace:_)
- | placeListEnd /= placeListWest =
-  ((fst (head placeListEnd)),posListWest)
- | otherwise                     =
-  ((Place char pos placeListEnd),posListWest)
+-- checkPath -> (Path,distance,posList
+-- Place char pos PlaceList@[(Place,distance)
+-- PlaceListWest -> [(Path,distance)]
+
+day18a_checkPlace :: (Int,Int) -> (Int,Int) -> [(Int,Int)] -> (Path,[(Int,Int)])
+day18a_checkPlace pos@(x,y) lastPlace posList
+ | (length placeListWest) == 1 && char == '.' = -- remove empty 
+  (\(Place a b c,d) -> (Place a b (map (\(e,f) -> (e,f + d)) c),posListWest)) (head placeListWest)
+ | otherwise =
+  ((Place char pos placeListWest),posListWest)
  where
   char = data_day18a Map.! pos
    
-  northPath = day18a_checkPath (x,y-1) pos posList --checkNorthPath
+  northPath = day18a_checkPath (x,y-1) pos pos posList --checkNorthPath
   northDistance = (\(a,b,c) -> b) northPath
   posListNorth = (\(a,b,c) -> c) northPath
   north = (\(a,b,c) -> (a,b)) northPath
-  northPos = (\((Place d e f),b,c) -> e) northPath
+  northPos = (\(Place d e f,b,c) -> e) northPath
   
-  eastPath = day18a_checkPath (x+1,y) pos posListNorth  --checkEast
+  eastPath = day18a_checkPath (x+1,y) pos pos posListNorth  --checkEast
   eastDistance = (\(a,b,c) -> b) eastPath
   posListEast = (\(a,b,c) -> c) eastPath
   east = (\(a,b,c) -> (a,b)) eastPath
   eastPos = (\((Place d e f),b,c) -> e) eastPath
   
-  southPath = day18a_checkPath (x,y+1) pos posListEast  --checkSouth
+  southPath = day18a_checkPath (x,y+1) pos pos posListEast  --checkSouth
   southDistance = (\(a,b,c) -> b) southPath
   posListSouth = (\(a,b,c) -> c) southPath
   south = (\(a,b,c) -> (a,b)) southPath
   southPos = (\((Place d e f),b,c) -> e) southPath
   
-  westPath = day18a_checkPath (x-1,y) pos posListSouth  --checkWest
+  westPath = day18a_checkPath (x-1,y) pos pos posListSouth  --checkWest
   westDistance = (\(a,b,c) -> b) westPath
   posListWest = (\(a,b,c) -> c) westPath
   west = (\(a,b,c) -> (a,b)) westPath
@@ -1166,38 +1426,22 @@ day18a_checkPlace pos@(x,y) posList@(_:lastPlace:_)
   placeListWest  = if westDistance > 0 && westPos /= lastPlace
                     then west:placeListSouth
                     else placeListSouth
+                    
   
-  -- not too lazy to remove empty-2-exit-nodes :O
-  -- get the distance to singleton path
-  singleDistance
-   | placeListWest == [north] = northDistance 
-   | placeListWest == [east]  = eastDistance 
-   | placeListWest == [south] = southDistance 
-   | placeListWest == [west]  = westDistance 
-   | otherwise                = 0
-  
-  -- change distance of singleton place (will be used in output above)
-  placeListEnd =
-   if length placeListWest == 1 && char == '.'
-    then
-     (\[(a,d)] -> [(a,d + singleDistance)]) placeListWest
-    else placeListWest
-
-
-day18a_checkPath :: (Int,Int) -> (Int,Int) -> [(Int,Int)] -> (Path,Int,[(Int,Int)])
-day18a_checkPath pos@(x,y) oldPos posList
+--                  Position     OldPosition  lastPlacePos usedPosList    Place Distance newUsedPosList  
+day18a_checkPath :: (Int,Int) -> (Int,Int) -> (Int,Int) -> [(Int,Int)] -> (Path,Int,[(Int,Int)])
+day18a_checkPath pos@(x,y) oldPos lastPlace posList
  | char == '#'          = (Place char pos [], 0, posList)
  | length pathList == 0 = if char == '.'
                            then (Place char pos [], 0, posList)
-                           else (Place char pos [], 1, pos:posList)
+                           else (Place char pos [], 1, posList)
  | length pathList == 1 && char == '.' = 
-  (\(a,b,c) ->
-   if b /= 0 -- && not ((\(Place a b c) -> a == '.' && c == []) a)
-    then (a,b+1,c)
-    else (a,0,c))
-   (day18a_checkPath (fst (head pathList)) pos posList)
- | elem pos posList     = (Place char pos [], 1, posList) 
- | otherwise            = (\(a,b) -> (a,1,b)) (day18a_checkPlace pos (pos:posList))
+  (\(a,b,c) -> if b /= 0 then (a,b+1,c) else (a,0,c))
+   (day18a_checkPath (fst (head pathList)) pos lastPlace posList)
+ | elem pos posList     = (Place char pos [], 1, posList) -- maybe change char to ',' for '.' to avoid deleting loops to dots?
+ | nextPlaceTrivial     = (\(a,b) -> (a,0,b)) nextPlace   -- ^ 
+ | otherwise            = (\(a,b) -> (a,1,b)) nextPlace   -- |_ apparently fixed
+ 
  where
   char = data_day18a Map.! pos
   north = (x,y-1)
@@ -1215,6 +1459,13 @@ day18a_checkPath pos@(x,y) oldPos posList
               (zip
                [north,east,south,west]
                [northChar,eastChar,southChar,westChar])
+  
+  -- nextPlaceTrivial might be wrong
+  nextPlace = day18a_checkPlace pos lastPlace (pos:posList)
+  nextPlaceTrivial = (\(Place a b c,d) -> a == '.' && c == [] && notElem b posList) nextPlace
+
+day18a_keys = [x | x <- Map.keys data_day18a_inverse, isLower x]
+day18a_locks = [x | x <- Map.keys data_day18a_inverse, isUpper x]
 
 data_day18a_inverse = Map.fromList (map (\(a,b) -> (b,a)) data_day18a_assocList)
 data_day18a = Map.fromList data_day18a_assocList
