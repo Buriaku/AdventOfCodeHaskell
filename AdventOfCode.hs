@@ -1064,22 +1064,27 @@ day17b_solution = map (ord) "A,A,B,C,B,C,B,C,A,C\nR,6,L,8,R,8\nR,4,R,6,R,6,R,4,R
 --   Path = Place Type Position  [(next Place, distance)])
 data Path = Place Char (Int,Int) [(Path, Int)] deriving (Show, Eq)
 
--- LabBranch lock entrancePos [branchList] directContent totalContent
--- LabLeaf lock entrancePos directContent
+-- LabBranch char pos directContent totalContent [branchList]
+-- LabStem char pos directContent totalContent [branchList]
 
 data LabTree = LabStem Char (Int,Int) String String [LabTree] | LabBranch Char (Int,Int) String String [LabTree] {-| LabLeaf Char (Int,Int) String-} deriving (Show, Eq)
 
 -- main = print (day18a_shortestPath keys (data_day18a_inverse Map.! 'a') (data_day18a_inverse Map.! '@'))
 
-day18a_output = day18a_calc day18a_start 0 []
+day18a_output = day18a_chooseBranch day18a_start 0 []
 
-day18a_calc pos length keys 
- | all (`elem` keys) day18a_keys =
+day18a_chooseBranch pos length keys 
+ | all (`elem` keys) day18a_essentialKeys = -- day18a_keys =
    [(length,keys)]
- | otherwise                    =
-  concat (map (\(a,b,c) -> day18a_calc a (length + b) (c:keys)) possiblePaths)
+ | otherwise                    = branches
+  -- concat (map (\(a,b,c) -> day18a_calc a (length + b) (c:keys)) possiblePaths)
  where
-  possibleKeys = day18a_possibleKeys keys
+  allPossibleKeys = day18a_possibleKeys keys
+  sensiblePossibleKeys = allPossibleKeys \\ day18a_deadEndKeys
+  possibleKeys = if sensiblePossibleKeys == []
+                  then allPossibleKeys
+                  else sensiblePossibleKeys
+  
   possibleKeyPositions = map (data_day18a_inverse Map.!) possibleKeys
   openLocks = intersect day18a_locks (map toUpper keys)
   openLockPos = map (data_day18a_inverse Map.!) openLocks
@@ -1087,17 +1092,75 @@ day18a_calc pos length keys
   keyPaths =
    zip (map (\a -> day18a_shortestPathMap Map.! (pos,a))
         possibleKeyPositions) possibleKeys
+      
+  possiblePaths = sort keyPaths
   
-  possiblePathsUnsorted =
-   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
-    | x <- keyPaths, (fst x) /= Nothing]
+  branches = concat (map (\(b,c) -> day18a_checkBranch (data_day18a_inverse Map.! c) (length + b) (c:keys)) possiblePaths)
+  
+day18a_checkBranch pos length keys
+ | all (`elem` keys) day18a_essentialKeys = -- day18a_keys =
+   [(length,keys)]
+ | parent == (-1,-1) =
+  day18a_chooseBranch pos nextLength nextKeys 
+ | otherwise =
+  day18a_checkBranch parent nextLength nextKeys
+  where 
+   mapElem = day18a_labTreeMap Map.! pos -- Map.findWithDefault (LabBranch ' ' (-1,-1) "" "" [],(-1,-1)) pos day18a_labTreeMap -- 
+   tree = fst mapElem
+   parent = snd mapElem
+   char = (\(LabBranch a b c d e) -> a) tree
+   direct = (\(LabBranch a b c d e) -> c) tree
+   total = (\(LabBranch a b c d e) -> d) tree
+  
+   openLocks = map toUpper keys
+   closedLocks = (filter (isUpper) total) \\ openLocks
+   containedKeys = (filter (isLower) total) \\ keys
+   
+   collect = 
+    if containedKeys == ""
+     then
+      (0,"")
+     else
+      day18a_shortestPermutation pos containedKeys
+   
+   collectLength = (\(a,b) -> a) collect
+   collectKeys = (\(a,b) -> b) collect
+  
+   nextKeys = if closedLocks == ""
+               then foldl (\acc x -> x:acc) keys collectKeys
+               else keys
+   
+   parentLength = if parent == (-1,-1)
+                   then 0
+                   else day18a_shortestPathMap Map.! (pos,parent)
+   
+   nextLength = if closedLocks == ""
+                 then length + collectLength + parentLength
+                 else length + parentLength
 
-  possiblePaths = sortBy (\(a,b,c) (d,e,f) -> compare b e) possiblePathsUnsorted
-
-day18a_shortestPathMap = Map.fromList [((x,y),(day18a_shortestPath lockPos x y)) | x <- keyPos, y <- keyPos, x /= y]
+-- can be significantly shortened by perusing tree
+day18a_shortestPermutation :: (Int,Int) -> String -> (Int,String)
+day18a_shortestPermutation pos containedKeys = shortest
  where
-  lockPos = map (data_day18a_inverse Map.!) day18a_locks 
+  containedKeyPos = map (data_day18a_inverse Map.!) containedKeys
+  posPerms = permutations containedKeyPos
+  keyPerms = permutations containedKeys
+  paths = zip (map (\a -> foldl (foldFunction) 0 (zip (pos:a) (a ++ [pos]))) posPerms) keyPerms
+  shortest = head (sort paths)
+  
+  foldFunction :: Int -> ((Int,Int),(Int,Int)) -> Int
+  foldFunction acc x = acc + (day18a_shortestPathMap Map.! x)
+
+day18a_shortestPathMap = fmap (\(a,b) -> b) day18a_shortestPathMapFull
+
+day18a_shortestPathMapFull = Map.fromList [(\(a,b) -> ((x,y),(a,b))) (day18a_shortestPath x y) | x <- allPos, y <- allPos, x /= y]
+ where
   keyPos = day18a_start:(map (data_day18a_inverse Map.!) day18a_keys)
+  allPos = Map.keys day18a_connectionMap
+
+day18a_deadEndKeys = day18a_keys \\ day18a_essentialKeys
+
+day18a_essentialKeys = nub (foldr (\(a,b) acc -> b ++ acc) "" day18a_totalNeededKeys)
   
 day18a_totalNeededKeys = zip day18a_keys neededKeyList_sorted
  where
@@ -1109,8 +1172,6 @@ day18a_totalNeededKeys = zip day18a_keys neededKeyList_sorted
   getTotalNeededKeys char = concat (map getTotalNeededKeys neededKeys) ++ neededKeys
    where
     neededKeys = map toLower (day18a_locksOnKey Map.! char)
-    
-
 
 day18a_locksOnKey = Map.fromList (zip day18a_keys (map getLocksBefore (map (data_day18a_inverse Map.!) day18a_keys)))
  where
@@ -1131,6 +1192,15 @@ day18a_labTreeMap = Map.unions (map (getLabTreeMap (-1,-1)) day18a_labTree)
   getLabTreeMap parent x@(LabBranch a b c d e) = Map.insert b (x,parent) treeMap
    where
     treeMap = Map.unions (map (getLabTreeMap b) e)
+
+-- list of branches and contained pos
+day18a_branchPosList = zip day18a_labTree posLists
+ where
+  posLists = map gatherPos day18a_labTree
+  
+  gatherPos (LabBranch a b c d []) = [b]
+  gatherPos (LabBranch a b c d e) =
+   b:(concat (map gatherPos e))
 
 day18a_labTree = map stemToTree (day18a_buildLabTree day18a_traverse)
  where
@@ -1164,10 +1234,6 @@ day18a_buildLabTree (Place char pos placeList)
   direct = sort (filter (/='.') (map (\(LabBranch a b c d e) -> a) branches))
   total = sort (concat (map (\(LabBranch a b c d e) -> d) branches) ++ direct)
   
-
--- LabBranch char entrancePos [branchList] directContent totalContent
--- LabLeaf char entrancePos directContent  
-
 day18a_circleLinks = circlePos
  where
   posList = getPos day18a_traverse
@@ -1176,47 +1242,92 @@ day18a_circleLinks = circlePos
   
   getPos (Place _ pos []) = [pos]
   getPos (Place _ pos list) = pos:(concat (map (\a -> getPos(fst (a))) list))
- 
-day18a_possibleKeys' keys pos = possibleKeys
- where
-  remainingKeys = day18a_keys \\ keys
-  remainingKeyPositions = map (data_day18a_inverse Map.!) remainingKeys
-  openLocks = intersect day18a_locks (map toUpper keys)
-  openLockPos = map (data_day18a_inverse Map.!) openLocks
-  keyPaths =
-   zip (map (day18a_shortestPath openLockPos pos)
-        remainingKeyPositions) remainingKeys
-  possibleKeys =
-   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
-    | x <- keyPaths, (fst x) /= Nothing]
-    
-day18a_possibleLocks keys pos = possibleLocks
- where
-  remainingLocks = day18a_locks \\ (map toUpper keys)
-  remainingLockPositions = map (data_day18a_inverse Map.!) remainingLocks
-  openLocks = intersect day18a_locks (map toUpper keys)
-  openLockPos = map (data_day18a_inverse Map.!) openLocks
-  lockPaths =
-   zip (map (day18a_shortestPath openLockPos pos)
-        remainingLockPositions) remainingLocks
-  possibleLocks =
-   [(last (fst (fromJust (fst x))),snd (fromJust (fst x)),snd x)
-    | x <- lockPaths, (fst x) /= Nothing]
 
-day18a_shortestPath :: [(Int,Int)] -> (Int,Int) -> (Int,Int) -> Maybe ([(Int,Int)],Int)
-day18a_shortestPath openLockPos pos1 pos2 =
- getShortestPath openLockPos [([pos1],0)] [([pos2],0)]
+day18a_concatPaths :: [([(Int,Int)],Int)] -> ([(Int,Int)],Int)
+day18a_concatPaths pathList = (path,distance)
  where
-  getShortestPath :: [(Int,Int)] -> [([(Int,Int)],Int)] -> [([(Int,Int)],Int)] -> Maybe ([(Int,Int)],Int)
-  getShortestPath openLockPos pathList1 pathList2
-   | pathList1sorted == [] || pathList2sorted == [] =
-    Nothing
+  paths = map fst pathList
+  path = (head paths) ++ concat (map (tail) (tail paths))
+  distance = sum (map snd pathList)
+
+day18a_shortestPath :: (Int,Int) -> (Int,Int) -> ([(Int,Int)],Int)
+day18a_shortestPath pos1 pos2
+ | sameBranch =
+  day18a_shortestPathSameBranch pos1 pos2
+ | bothField  =
+  day18a_shortestPathField pos1 pos2
+ | noField    =
+  day18a_concatPaths [path1,(day18a_shortestPathField root1 root2),path2] -- branch1 + field + branch2
+  | pos1Field =
+  day18a_concatPaths [(day18a_shortestPathField pos1 root2),path2] -- field + branch2
+ | pos2Field =
+  day18a_concatPaths [path1,(day18a_shortestPathField root1 pos2)] -- branch1 + field
+ | otherwise  =
+  ([(0,0)],0)
+  where
+   stemPos = foldr (\(LabBranch a b c d e) acc -> b:acc) [] day18a_labTree
+   fieldPos = day18a_circleLinks ++ stemPos
+   
+   pos1Field = (elem pos1 fieldPos)
+   pos2Field = (elem pos2 fieldPos)
+   bothField = pos1Field && pos2Field
+   noField = not (pos1Field || pos2Field)
+   
+   pos1BranchList = filter (\(a,b) -> elem pos1 b) day18a_branchPosList
+   pos1Branch = fst (head pos1BranchList)
+   pos2BranchList = filter (\(a,b) -> elem pos2 b) day18a_branchPosList
+   pos2Branch = fst (head pos2BranchList)
+   sameBranch = (pos1BranchList == pos2BranchList) && pos1BranchList /= []
+   
+   commList1 = day18a_branchPath pos1
+   commList2 = day18a_branchPath pos2
+   
+   root1 = fst (last commList1)
+   root2 = fst (last commList2)
+   
+   path1 = foldr (\(a,b) (c,d) -> (a:c,b+d)) ([],0) commList1
+   path2 = foldl (\(c,d) (a,b) -> (a:c,b+d)) ([],0) commList2
+
+day18a_shortestPathSameBranch pos1 pos2 = day18a_concatPaths [path1,path2]
+ where
+  branchPath1full = day18a_branchPath pos1
+  branchPath2full = day18a_branchPath pos2
+  branchPath1cut = branchPath1full \\ branchPath2full
+  branchPath2cut = branchPath2full \\ branchPath1full
+  path1 = foldr (\(a,b) (c,d) -> (a:c,b+d)) ([],0) branchPath1cut
+  path2 = foldl (\(c,d) (a,b) -> (a:c,b+d)) ([],0) branchPath2cut
+
+day18a_branchPath pos = getBranchPath pos pos
+ where
+  getBranchPath (-1,-1) _ = []
+  getBranchPath pos child
+   | pos == child =
+    (pos,0):getBranchPath parent pos
+   | otherwise    =
+    (pos,distance):(getBranchPath parent pos)
+   where
+    mapElem = day18a_labTreeMap Map.! pos 
+    tree = fst mapElem
+    parent = snd mapElem
+    branch = (\(LabBranch a b c d e) -> e) tree    
+    distance = snd (head (filter (\x -> fst x == child) (day18a_connectionMap Map.! pos)))
+
+-- outdated but only gets field members
+day18a_shortestPathField :: (Int,Int) -> (Int,Int) -> ([(Int,Int)],Int)
+day18a_shortestPathField pos1 pos2
+ | pos1 == pos2 = ([pos1],0)
+ | otherwise = getShortestPath [([pos1],0)] [([pos2],0)]
+ where
+  getShortestPath :: [([(Int,Int)],Int)] -> [([(Int,Int)],Int)] -> ([(Int,Int)],Int)
+  getShortestPath  pathList1 pathList2
+   {-| pathList1sorted == [] || pathList2sorted == [] =
+    Nothing-}
    | pathPositionsIntersect /= [] =
-    finishShortestPath openLockPos pathList1 pathList2
+    finishShortestPath pathList1 pathList2
    | snd path1head <= snd path2head =
-    getShortestPath openLockPos pathList1updated pathList2
+    getShortestPath pathList1updated pathList2
    | otherwise =
-    getShortestPath openLockPos pathList1 pathList2updated
+    getShortestPath pathList1 pathList2updated
    where
     pathList1sorted =
      dropWhile (\(a,b) -> b < 0)
@@ -1234,14 +1345,14 @@ day18a_shortestPath openLockPos pos1 pos2 =
        
     pos1options =
      [conn | conn <- (day18a_connectionMap Map.! pos1),
-      notElem (fst conn) (fst path1head),
+      notElem (fst conn) (fst path1head) {-, -- no lock check no more
       (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
-       || elem (fst conn) openLockPos)] -- check for keys
+       || elem (fst conn) openLockPos) -}] -- don't check for keys
     pos2options =
      [conn | conn <- (day18a_connectionMap Map.! pos2),
-      notElem (fst conn) (fst path2head),
+      notElem (fst conn) (fst path2head) {-, -- no lock check no more
       (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
-       || elem (fst conn) openLockPos)] -- check for keys
+       || elem (fst conn) openLockPos) -}] -- check for keys
     pathList1snubbed = delete path1head pathList1
     pathList2snubbed = delete path2head pathList2
     
@@ -1263,7 +1374,7 @@ day18a_shortestPath openLockPos pos1 pos2 =
       else
        ((\(a,b) -> (a,-1)) path2head):pathList2snubbed
        
-  finishShortestPath openLockPos pathList1 pathList2 = output
+  finishShortestPath pathList1 pathList2 = output
    where
     pathList1sorted =
      dropWhile (\(a,b) -> b < 0)
@@ -1271,8 +1382,6 @@ day18a_shortestPath openLockPos pos1 pos2 =
     pathList2sorted =
      dropWhile (\(a,b) -> b < 0)
       (sortBy (\(a,b) (c,d) -> compare b d) pathList2)
-    -- path1positions = concat (map fst pathList1)
-    -- path2positions = concat (map fst pathList2)
     path1sortedPositions = concat (map fst pathList1sorted)
     path2sortedPositions = concat (map fst pathList2sorted)
     
@@ -1298,9 +1407,9 @@ day18a_shortestPath openLockPos pos1 pos2 =
      takeWhile (\(a,b) -> b < path2minLength) pathList2sorted
     
     pathList1notShort =
-     concat (map (fillOutPath openLockPos path1minLength) pathList1short)
+     concat (map (fillOutPath path1minLength) pathList1short)
     pathList2notShort =
-     concat (map (fillOutPath openLockPos path2minLength) pathList2short)
+     concat (map (fillOutPath path2minLength) pathList2short)
      
     pathList1updated = pathList1long ++ pathList1notShort
     pathList2updated = pathList2long ++ pathList2notShort
@@ -1319,12 +1428,12 @@ day18a_shortestPath openLockPos pos1 pos2 =
        [y | y <- pathList2updated, elem x (fst y)]):acc) [] pathUpdatedPositionsIntersect
        
     output =
-     Just (head
+     head
       (sortBy (\(a,b) (c,d) -> compare b d)
        (foldr (\((a,b),(c,d)) acc -> ((reverse a) ++ (tail c),b + d):acc) []
-        (zip remainingPaths1 remainingPaths2))))
+        (zip remainingPaths1 remainingPaths2)))
     
-  fillOutPath openLockPos minLength path = list
+  fillOutPath minLength path = list
    where
     -- get options
     pathPos = fst path
@@ -1332,9 +1441,9 @@ day18a_shortestPath openLockPos pos1 pos2 =
     pos = head pathPos
     options =
      [conn | conn <- (day18a_connectionMap Map.! pos),
-      notElem (fst conn) pathPos,
+      notElem (fst conn) pathPos {-, -- no lock check no more
       (notElem (data_day18a Map.! (fst conn)) day18a_locks -- check if lock
-       || elem (fst conn) openLockPos)] -- check for keys
+       || elem (fst conn) openLockPos) -}] -- check for keys
        
     -- dead ends get -1
     newPaths = if options == []
@@ -1349,7 +1458,7 @@ day18a_shortestPath openLockPos pos1 pos2 =
     
     -- recursive longer for short
     newPathsNotShort =
-     foldr (\x acc -> (fillOutPath openLockPos minLength x) ++ acc) [] newPathsShort 
+     foldr (\x acc -> (fillOutPath minLength x) ++ acc) [] newPathsShort 
     
     list = newPathsNotShort ++ newPathsLong
 
