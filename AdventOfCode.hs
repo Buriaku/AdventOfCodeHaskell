@@ -1075,8 +1075,9 @@ day18a_output = day18a_chooseBranch day18a_start 0 []
 
 day18a_chooseBranch pos length keys 
  | all (`elem` keys) day18a_essentialKeys = -- day18a_keys =
-   [(length,keys)]
- | otherwise                    = branches
+  finishBranch length keys -- [(length,keys)]
+ | otherwise =
+  branches
   -- concat (map (\(a,b,c) -> day18a_calc a (length + b) (c:keys)) possiblePaths)
  where
   allPossibleKeys = day18a_possibleKeys keys
@@ -1098,14 +1099,14 @@ day18a_chooseBranch pos length keys
   branches = concat (map (\(b,c) -> day18a_checkBranch (data_day18a_inverse Map.! c) (length + b) (c:keys)) possiblePaths)
   
 day18a_checkBranch pos length keys
- | all (`elem` keys) day18a_essentialKeys = -- day18a_keys =
-   [(length,keys)]
+ | all (`elem` keys) day18a_essentialKeys =
+  finishBranch length keys -- [(length,keys)]
  | parent == (-1,-1) =
   day18a_chooseBranch pos nextLength nextKeys 
  | otherwise =
   day18a_checkBranch parent nextLength nextKeys
   where 
-   mapElem = day18a_labTreeMap Map.! pos -- Map.findWithDefault (LabBranch ' ' (-1,-1) "" "" [],(-1,-1)) pos day18a_labTreeMap -- 
+   mapElem = day18a_labTreeMap Map.! pos
    tree = fst mapElem
    parent = snd mapElem
    char = (\(LabBranch a b c d e) -> a) tree
@@ -1137,6 +1138,26 @@ day18a_checkBranch pos length keys
    nextLength = if closedLocks == ""
                  then length + collectLength + parentLength
                  else length + parentLength
+
+
+finishBranch length keys =
+ [(length,keys ++ " ; " ++ missingKeys)]
+ where
+  missingKeys = day18a_deadEndKeys \\ keys
+  insertableChain =
+   map
+    (\x -> takeWhilePlus
+     (\y -> notElem y (day18a_locksOnKey Map.! x))
+     keys)
+    missingKeys
+
+takeWhilePlus :: (a -> Bool) -> [a] -> [a]
+takeWhilePlus p [] = []
+takeWhilePlus p (x:xs) = 
+   if p x
+   then x : takeWhilePlus p xs
+   else [x]
+
 
 -- can be significantly shortened by perusing tree
 day18a_shortestPermutation :: (Int,Int) -> String -> (Int,String)
