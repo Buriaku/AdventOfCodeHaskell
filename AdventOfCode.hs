@@ -1,10 +1,20 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE PatternSynonyms #-}
+
 import Data.List
 import Data.Array
 import Data.Foldable
 import Data.Char
 import Data.Maybe
 import Data.Ord
+
 import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
+-- import qualified Data.Field.Galois (Prime, Extension, IrreducibleMonic(poly), Binary,pattern X, pattern X2, pattern X3, pattern Y) as Gal
+import Data.Field.Galois (Prime, Extension, IrreducibleMonic(poly), Binary,pattern X, pattern X2, pattern X3, pattern Y)
 
 import AdventOfCodeData
 import AdventOfCodeDataOld
@@ -615,6 +625,7 @@ day12b = (x_period,y_period,z_period)
   y_period = length (takeWhile (compareCoordinate 1 (day12a_vec,day12a_vel)) (tail (day12a_calc day12a_vec day12a_vel))) + 1
   z_period = length (takeWhile (compareCoordinate 2 (day12a_vec,day12a_vel)) (tail (day12a_calc day12a_vec day12a_vel))) + 1
 
+
 getPrimeFactors :: Int -> [Int]
 getPrimeFactors n = primeFactors n 2 primes []
 
@@ -626,8 +637,10 @@ primeFactors n lastPrime primeList@(nextPrime:otherPrimes) divisorList
  | otherwise            = primeFactors n nextPrime otherPrimes divisorList
 
 primes :: [Int]
-primes = [n | n <- [2..], foldl (\acc x -> if mod n x == 0 then n:acc else acc) [] [2..(floor (sqrt (fromIntegral n)))] == []]
+primes =
+ [n | n <- [2..], foldl (\acc x -> if mod n x == 0 then n:acc else acc) [] ([2..(floor (sqrt (fromIntegral n)))] :: [Int]) == []]
 
+compareCoordinate :: Int -> ([(Int,Int,Int)],[(Int,Int,Int)]) -> ([(Int,Int,Int)],[(Int,Int,Int)]) -> Bool
 compareCoordinate coord ([a,b,c,d],[e,f,g,h]) ([i,j,k,l],[m,n,o,p])
  = not (((getCoordinate coord a) == (getCoordinate coord i)) &&
         ((getCoordinate coord b) == (getCoordinate coord j)) &&
@@ -786,14 +799,14 @@ foldOre (oreAcc,surplusAcc) (eductNeeded,educt) =
   eductFromReaction = (\(a,b,c) -> a) eductOreReaction
   eductOre = (\(a,b,c) -> b) eductOreReaction
   eductSurplus = (\(a,b,c) -> c) eductOreReaction
-  reactionMultiplier = div_ceiling eductNeeded eductFromReaction
+  reactionMultiplier = divCeiling eductNeeded eductFromReaction
   reactionSurplus = (reactionMultiplier * eductFromReaction) - eductNeeded
   eductSurplusMultiplied = map (\(a,b) -> ((a * reactionMultiplier),b)) eductSurplus
   nextSurplus = case reactionSurplus of
                  0         -> eductSurplusMultiplied ++ surplusAcc
                  otherwise -> (reactionSurplus,educt):eductSurplusMultiplied ++ surplusAcc
 
-div_ceiling a b = ceiling (c / d)
+divCeiling a b = ceiling (c / d)
  where
   c = fromIntegral a
   d = fromIntegral b
@@ -997,7 +1010,7 @@ day16b_step (n:shortList) = (mod (n + acc) 10):(newList)
 data_day16b = drop offsetDrop (concat (replicate replication data_day16a))
  where
   listLength = day16a_length * day16b_multiplicator - day16b_offset
-  replication = div_ceiling listLength day16a_length
+  replication = divCeiling listLength day16a_length
   offsetDrop = replication * day16a_length - listLength
   
 
@@ -1898,6 +1911,7 @@ day20a_getConnections pos@(x,y) = connections
     Nothing -> []
   connections = portalPosList ++ dotPosList
 
+day20a_start :: (Int,Int)
 day20a_start = head $ day20a_portals Map.! "AA"
 day20a_end = head $ day20a_portals Map.! "ZZ"
 
@@ -1972,8 +1986,6 @@ day20b_output =
 day20b_queuingAlgorithm itemMap priorityMap
  | elem (0,end) levelPosList =
   lowestItem
- | n == 0 =
-  lowestItem
  | otherwise =
   day20b_queuingAlgorithm nextItemMap nextPriorityMap
  where
@@ -2015,7 +2027,7 @@ day20b_queuingAlgorithm itemMap priorityMap
    map nonPortaltoPortalOption nonPortalOptionsClipped
   
   nonPortaltoPortalOption option
-   | elem portal [start,end] =
+   | elem portal (start:end:[]) =
     (fst option,[snd option])
    | otherwise =
     portalOption
@@ -2205,3 +2217,216 @@ day20b_yLimits =
 
 day20b_xMid = div day20a_xLength 2
 day20b_yMid = div day20a_yLength 2
+
+-- Day 21a
+
+day21a = day21a_print day21a_solution
+
+day21a_print solution =
+ do
+  putStrLn (day21a_output solution)
+  return ()
+
+day21a_output solution = string
+ where
+  output = reverse $ day21a_calc solution
+  string
+   | last output > 256 =
+    (map chr $ init output) ++ (show $ last output)
+   | otherwise =
+    map chr output
+    
+day21a_calc solution = (\(a,b,c,d,e,f,g) -> g) output
+ where
+  output = cICC_output_raw (cICC_init data_day21a) 0 0 ord_solution
+  ord_solution = map ord solution
+
+day21a_solution = "NOT A T\nNOT C J\nOR T J\nAND D J\nWALK\n"
+
+-- Day 21b
+
+day21b = day21a_print day21b_solution
+
+day21b_solution = "NOT C T\nAND D T\nOR D J\nAND F J\nNOT J J\nOR E J\nOR H J\nAND T J\nNOT A T\nOR T J\nOR B T\nOR E T\nNOT T T\nOR T J\nRUN\n"
+
+-- Day 22a
+
+day22a = fromJust $ Seq.elemIndexL 2019 day22a_output
+
+day22a_output =
+ day22a_calc day22a_length day22a_cards day22a_instructions
+
+day22a_calc length cards [] = cards
+day22a_calc length cards ((letters,numbers):nextInstructions) =
+ day22a_calc length nextCards nextInstructions
+ where
+  nextCards
+   | letters == "dealintonewstack" =
+    day22a_deal cards
+   | letters == "cut" =
+    day22a_cut length cards (read numbers :: Int)
+   | letters == "dealwithincrement" =
+    day22a_increment length cards (read numbers :: Int)
+
+day22a_increment length sequence n = newSequence
+ where
+  offsetLists = takeLists n 0 sequence
+  riffleLists = snd $ unzip $ sort offsetLists
+  newSequence = popUntilEmpty riffleLists 
+  
+  popUntilEmpty [] = Seq.empty
+  popUntilEmpty list =
+   currSeq Seq.>< nextSeq
+   where
+    output = popOneFromEachToSeq list
+    currSeq = fst output
+    nextList = snd output
+    nextSeq = popUntilEmpty nextList   
+  
+  popOneFromEachToSeq [] = (Seq.empty,[])
+  popOneFromEachToSeq (([]:listTail)) =
+   popOneFromEachToSeq listTail
+  popOneFromEachToSeq ((listHead:listTail):nextLists) =
+    (listHead Seq.:<| nextSeq,listTail:tailList)
+   where
+    output = popOneFromEachToSeq nextLists
+    nextSeq = fst output
+    tailList = snd output
+  
+  takeLists m i sequence
+   | m == i =
+    []
+   | otherwise =
+    (offset,list):(takeLists m (i + 1) newSequence)
+   where
+    prevElement = (div (length * i - 1) m) + 1
+    offset = mod (mod (m * prevElement) length) m
+    amount = (div (length - offset - 1) m) + 1
+    
+    output = splitSeqToList sequence amount
+    list = fst output
+    newSequence = snd output
+  
+  splitSeqToList Seq.Empty _ = ([],Seq.empty)
+  splitSeqToList sequence 0 = ([],sequence)
+  splitSeqToList (sHead Seq.:<| sTail) m =
+   (sHead:(fst output),snd output)
+   where
+    output = splitSeqToList sTail (m - 1)
+
+day22a_cut length sequence m = (\(a,b) -> b Seq.>< a) split
+ where
+  n | m > 0 = m
+    | otherwise = length + m
+  split = Seq.splitAt n sequence
+
+day22a_deal sequence = Seq.reverse sequence
+
+day22a_instructions = zip letters numbers
+ where
+  split = splitOn ';' data_day22a
+  letters = map (filter isLower) split
+  numbers = map (filter (`elem` '-':['0'..'9'])) split
+
+day22a_cards = Seq.fromList [0..(day22a_length - 1)]
+day22a_length = 10007
+
+-- Day 22b
+
+-- day22b = Seq.index day22b_output 2020
+
+{-
+newPos = (l - 1) - n + oldPos
+oldPos = newPos - (l - 1) + n
+
+newpos = oldPos - n
+oldpos = newpos + n
+-}
+
+day22b_iterate n pos
+ | oldPos == day22b_newPos || n == 1 = 
+  [(n - 1,oldPos)]
+ | mod (n - 1) 10000 == 0 =
+  (n - 1,oldPos):(day22b_iterate (n - 1) oldPos)
+ | otherwise =
+  day22b_iterate (n - 1) oldPos
+ where
+  oldPos = day22b_output pos
+
+day22b_output pos = day22b_calc pos day22b_instructions
+
+day22b_calc pos [] = pos
+day22b_calc pos ((letters,numbers):prevInstructions) =
+ day22b_calc prevPos prevInstructions
+ where
+  prevPos
+   | letters == "dealintonewstack" =
+    day22b_deal_reverse pos
+   | letters == "cut" =
+    day22b_cut_reverse (read numbers :: Int) pos
+   | letters == "dealwithincrement" =
+    day22b_increment_reverse (read numbers :: Int) pos
+
+day22b_increment_reverse n pos = oldPos
+ where
+  output = divMod pos n
+  cyclePosition = fst output
+  offset = snd output
+  
+  cycle = day22b_offsetCycleMap Map.! (n,offset)  
+  prevElements = day22b_prevElementsMap Map.! (n,cycle)
+  oldPos = cyclePosition + prevElements
+  
+  {- filledLength = (mod day22b_length n) * n
+  offsetPitch = n - (day22b_length - filledLength)
+  offsetCycleMap =
+   map (\i -> (i,mod (i * offsetPitch) n)) [0..n]
+  cycle =
+   fst $ head $ dropWhile (\x -> snd x /= offset) offsetCycleMap 
+  prevElements = (div ((day22b_length * cycle) - 1) n) + 1 -}
+
+day22b_prevElementsMap =
+ Map.fromList $ prevElementMap
+ where
+  prevElementMap =
+     [((n,cycle),(div ((day22b_length * cycle) - 1) n) + 1) |
+      n <- day22b_increment_ns, cycle <- [0..n]]
+
+day22b_offsetCycleMap =
+ Map.fromList $ concat $ map getOffsetCycleMap day22b_increment_ns
+ where
+  getOffsetCycleMap n = offsetCycleMap
+   where
+    filledLength = (mod day22b_length n) * n
+    offsetPitch = n - (day22b_length - filledLength)
+    offsetCycleMap =
+     map (\i -> ((n,mod (i * offsetPitch) n),i)) [0..n]
+     
+day22b_increment_ns = nub ns
+ where
+  list =
+   filter
+    (\(a,b) -> a == "dealwithincrement") day22b_instructions
+  ns = map (\x -> read x :: Int) $ snd $ unzip list
+
+day22b_cut_reverse m pos
+ | pos < n =
+  day22b_length - n + pos
+ | pos >= n =
+  pos - n
+ where
+  n | m > 0 = day22b_length - m
+    | otherwise = (- m)
+
+day22b_deal_reverse pos =
+ day22b_length - 1 - pos
+ 
+day22b_newPos = 2020
+ 
+day22b_instructions = reverse day22a_instructions
+ 
+day22b_iterations = 101741582076661
+
+day22b_length = 119315717514047
+
+-- type Field = Prime 10007
