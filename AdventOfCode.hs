@@ -2333,100 +2333,335 @@ day22a_length = 10007
 
 -- Day 22b
 
--- day22b = Seq.index day22b_output 2020
+day22b = day22b_apply day22b_endCard operator
+ where
+  binaryList = toBinaryList day22b_iterations
+  iteratedOperatorList =
+   iterateOperator binaryList day22b_compounded
+  compounded = compoundOperatorList iteratedOperatorList
+  operator =  day22b_inverse compounded
 
-{-
-newPos = (l - 1) - n + oldPos
-oldPos = newPos - (l - 1) + n
-
-newpos = oldPos - n
-oldpos = newpos + n
--}
-
-day22b_iterate n pos
- | oldPos == day22b_newPos || n == 1 = 
-  [(n - 1,oldPos)]
- | mod (n - 1) 10000 == 0 =
-  (n - 1,oldPos):(day22b_iterate (n - 1) oldPos)
+iterateOperator [] operator = []
+iterateOperator (curr:next) operator
+ | curr == 1 =
+  operator:(iterateOperator next doubledOperator)
  | otherwise =
-  day22b_iterate (n - 1) oldPos
+  iterateOperator next doubledOperator
  where
-  oldPos = day22b_output pos
+  doubledOperator = doubleOperator operator
 
-day22b_output pos = day22b_calc pos day22b_instructions
-
-day22b_calc pos [] = pos
-day22b_calc pos ((letters,numbers):prevInstructions) =
- day22b_calc prevPos prevInstructions
+compoundOperatorList [op] = op
+compoundOperatorList (op1:op2:rest) =
+ compoundOperatorList (newOp:rest)
  where
-  prevPos
+  newOp = compoundTwoOperators op1 op2
+
+doubleOperator op = compoundTwoOperators op op
+
+compoundTwoOperators (a,b) (c,d) = (a * c,b * c + d)  
+
+-- from big endian binary list
+fromBinaryList [0] n = 0
+fromBinaryList [1] n = n
+fromBinaryList (current:next) n =
+ current * n + fromBinaryList next (n * 2)
+
+-- to big endian binary list
+toBinaryList 0 = [0]
+toBinaryList 1 = [1]
+toBinaryList number = modulo:(toBinaryList divided)
+ where
+  output = divMod number 2
+  divided = fst output
+  modulo = snd output
+
+-- make inverse instruction x = y/a - b/a
+day22b_inverse (a,b) = (1 / a,-1 * b / a)
+
+day22b_compounded = day22b_compound day22a_instructions (1,0)
+
+-- apply instruction/operator to number
+day22b_apply number (a,b) = (number * a) + b
+
+-- compound instructions to a*x + b = y form
+day22b_compound [] coeffs = coeffs
+day22b_compound ((letters,numbers):nextInstructions) coeffs =
+ day22b_compound nextInstructions newCoeffs
+ where
+  newCoeffs
+   -- multiplication with -1, then addition of -1
    | letters == "dealintonewstack" =
-    day22b_deal_reverse pos
+    day22b_mult (-1) $ day22b_add 1 coeffs
+   -- subtraction
    | letters == "cut" =
-    day22b_cut_reverse (read numbers :: Int) pos
+    day22b_add (-1 * toField) coeffs 
+   -- multiplication
    | letters == "dealwithincrement" =
-    day22b_increment_reverse (read numbers :: Int) pos
-
-day22b_increment_reverse n pos = oldPos
- where
-  output = divMod pos n
-  cyclePosition = fst output
-  offset = snd output
-  
-  cycle = day22b_offsetCycleMap Map.! (n,offset)  
-  prevElements = day22b_prevElementsMap Map.! (n,cycle)
-  oldPos = cyclePosition + prevElements
-  
-  {- filledLength = (mod day22b_length n) * n
-  offsetPitch = n - (day22b_length - filledLength)
-  offsetCycleMap =
-   map (\i -> (i,mod (i * offsetPitch) n)) [0..n]
-  cycle =
-   fst $ head $ dropWhile (\x -> snd x /= offset) offsetCycleMap 
-  prevElements = (div ((day22b_length * cycle) - 1) n) + 1 -}
-
-day22b_prevElementsMap =
- Map.fromList $ prevElementMap
- where
-  prevElementMap =
-     [((n,cycle),(div ((day22b_length * cycle) - 1) n) + 1) |
-      n <- day22b_increment_ns, cycle <- [0..n]]
-
-day22b_offsetCycleMap =
- Map.fromList $ concat $ map getOffsetCycleMap day22b_increment_ns
- where
-  getOffsetCycleMap n = offsetCycleMap
+    day22b_mult toField coeffs
    where
-    filledLength = (mod day22b_length n) * n
-    offsetPitch = n - (day22b_length - filledLength)
-    offsetCycleMap =
-     map (\i -> ((n,mod (i * offsetPitch) n),i)) [0..n]
-     
-day22b_increment_ns = nub ns
- where
-  list =
-   filter
-    (\(a,b) -> a == "dealwithincrement") day22b_instructions
-  ns = map (\x -> read x :: Int) $ snd $ unzip list
+    readNumbers = read numbers :: Int    
+    toField =  fromIntegral readNumbers :: Field
 
-day22b_cut_reverse m pos
- | pos < n =
-  day22b_length - n + pos
- | pos >= n =
-  pos - n
- where
-  n | m > 0 = day22b_length - m
-    | otherwise = (- m)
+day22b_add add (a,b) = (a,b + add)
 
-day22b_deal_reverse pos =
- day22b_length - 1 - pos
+day22b_mult mult (a,b) = (a * mult,b * mult)
  
-day22b_newPos = 2020
- 
-day22b_instructions = reverse day22a_instructions
+day22b_endCard = 2020
  
 day22b_iterations = 101741582076661
 
-day22b_length = 119315717514047
+type Field = Prime 119315717514047
 
--- type Field = Prime 10007
+-- Day 23a
+
+-- (intMap, "Halt", opCode, position, relativeBase, input, output)
+
+day23a = last day23a_output
+
+day23a_output =
+ day23a_loop nodeList packetList
+ where
+  mem0 = cICC_init data_day23a
+  nodeList = [(n,(mem0,0,0)) | n <- [0..49]]
+  packetList = [[n,n,-1] | n <- [0..49]] :: [[Int]]
+
+day23a_loop :: [(Int,(Map.Map Int Int,Int,Int))] -> [[Int]] -> [[Int]]
+day23a_loop nodeList packetList
+ | head result == 255 =
+   [result]
+ | otherwise =
+  result:(day23a_loop nextNodeList nextPacketList)
+ where
+  result
+   | packetList /= [] =
+    maximumBy (comparing head) packetList
+   | otherwise =
+    [-1]
+  
+  output =
+   getPackets nodeList packetList
+  
+  output_unzipped = unzip output
+  
+  nextNodeList = zip [0..49] $ fst output_unzipped
+  nextPacketList = sort $ concat $ snd output_unzipped
+  
+  getPackets [] packetList = [] -- may break for b
+  getPackets ((n,state):nextNodeList) packetList = 
+   (day23a_calc state packets):
+    getPackets nextNodeList nextPacketList
+   where
+    split = break (\[a,b,c] -> a > n) packetList
+    packetsRaw = concat $ map tail $ fst split
+    packets
+     | packetsRaw == [] = [-1]
+     | otherwise = packetsRaw
+    nextPacketList = snd split
+
+day23a_calc (memory,position,offset) input =
+ (\(a,b,c,d,e,f,g) -> ((a,d,e),spoolList 3 $ reverse g)) output
+ where
+ output = cICC_output_raw memory position offset input
+
+-- Day 23b
+
+day23b = take 2 day23b_output
+
+day23b_output =
+ day23b_loop nodeList packetList []
+ where
+  mem0 = cICC_init data_day23a
+  nodeList = [(n,(mem0,0,0)) | n <- [0..49]]
+  packetList = [[n,n,-1] | n <- [0..49]] :: [[Int]]
+
+day23b_loop nodeList packetList natList
+ | packetList == [] && natList /= [] =
+  day23b_loop nodeList [0:(tail $ head natList)] natList
+ | length natList > 2 &&
+    (last $ head natList) == (last $ head $ tail natList) =
+  natList
+ | otherwise =
+  day23b_loop nextNodeList nextPacketList nextNatList
+ where
+  nextNatList
+   | packetList /= [] =
+    (take 1 $ filter (\x -> head x == 255) packetList) ++ natList
+   | otherwise =
+    natList
+  
+  output =
+   getPackets nodeList packetList
+  
+  output_unzipped = unzip output
+  
+  nextNodeList = zip [0..49] $ fst output_unzipped
+  nextPacketList = sort $ concat $ snd output_unzipped
+  
+  getPackets [] packetList = [] -- may break for b
+  getPackets ((n,state):nextNodeList) packetList = 
+   (day23a_calc state packets):
+    getPackets nextNodeList nextPacketList
+   where
+    split = break (\[a,b,c] -> a > n) packetList
+    packetsRaw = concat $ map tail $ fst split
+    packets
+     | packetsRaw == [] = [-1]
+     | otherwise = packetsRaw
+    nextPacketList = snd split 
+    
+-- Day 24a
+
+day24a = day24a_output
+
+day24a_output = fromBinaryList list 0
+ where
+  list = map ((head day24a_calc) Map.!) day24a_coords
+
+day24a_calc = day24a_iterate [day24a_map]
+
+day24a_iterate bugMaps@(currMap:_)
+ | elem nextBugMap bugMaps =
+  nextBugMap:bugMaps
+ | otherwise =
+  day24a_iterate $ nextBugMap:bugMaps
+ where
+  nextBugMap =
+   Map.fromList
+    [(pos,day24a_check pos currMap) | pos <- day24a_coords]
+
+day24a_check (x,y) bugMap
+ | curr == 1 =
+  if count == 1 then 1 else 0
+ | otherwise =
+  if count == 1 || count == 2 then 1 else 0
+ where
+  curr  = Map.findWithDefault 0 (x,y) bugMap
+  north = Map.findWithDefault 0 (x,y-1) bugMap
+  east  = Map.findWithDefault 0 (x+1,y) bugMap
+  south = Map.findWithDefault 0 (x,y+1) bugMap 
+  west  = Map.findWithDefault 0 (x-1,y) bugMap
+  count = north + east + south + west  
+
+day24a_map = Map.fromList day24a_assocList
+
+day24a_assocList :: [((Int,Int),Int)]
+day24a_assocList =
+ zip
+  day24a_coords
+  $ map (\x -> if x == '#' then 1 else 0) $ concat day24a_split
+
+day24a_coords = [(x,y) | y <- [0..day24a_yMax], x <- [0..day24a_xMax]]
+
+day24a_xMax = (length $ head day24a_split) - 1
+day24a_yMax = (length day24a_split) - 1
+day24a_xLength = length $ head day24a_split
+day24a_yLength = length day24a_split
+
+day24a_split = splitOn ';' data_day24a
+
+-- Day 24b
+
+day24b = sum day24b_output
+
+day24b_output = snd $ unzip $ fst day24b_calc
+
+day24b_calc = day24b_iterate 0 $ Map.singleton 0 day24a_map
+
+day24b_iterate n bugMapMap
+ | n == 200 =
+  (bugsPerLevel,bugMapMap) -- sum $ snd $ unzip bugsPerLevel
+ | otherwise =
+  day24b_iterate (n + 1) nextBugMapMap
+ where
+  levels = Map.keys bugMapMap
+  bugsPerLevel =
+   map
+    (\(level,bugMap) -> (level,sum $ Map.elems bugMap)) $
+    Map.toList $ bugMapMap
+  filteredBugLevels =
+   fst $ unzip $ filter (\(x,y) -> y > 0) bugsPerLevel
+  minLevel = (minimum filteredBugLevels) - 1
+  maxLevel = (maximum filteredBugLevels) + 1
+  nextBugMapMap =
+   Map.fromList
+    [(level,day24b_nextMap level bugMapMap) |
+     level <- [minLevel..maxLevel]]
+
+day24b_nextMap level bugMapMap = Map.fromList assocList
+ where
+  assocList =
+   [(pos,day24b_check level pos bugMapMap) | pos <- day24b_coords]
+
+day24b_check level (x,y) bugMapMap
+ | curr == 1 =
+  if count == 1 then 1 else 0
+ | otherwise =
+  if count == 1 || count == 2 then 1 else 0
+ where
+  curr = day24b_findBugs 0 level (x,y) bugMapMap
+  north = day24b_findBugs 0 level (x,y-1) bugMapMap
+  east  = day24b_findBugs 1 level (x+1,y) bugMapMap
+  south = day24b_findBugs 2 level (x,y+1) bugMapMap 
+  west  = day24b_findBugs 3 level (x-1,y) bugMapMap
+  count = north + east + south + west
+  
+day24b_findBugs direction level (x,y) bugMapMap
+ | x < 0 =
+  Map.findWithDefault 0 (1,2) $
+   Map.findWithDefault Map.empty (level - 1)
+    bugMapMap
+ | x > day24a_xMax =
+  Map.findWithDefault 0 (3,2) $
+   Map.findWithDefault Map.empty (level - 1)
+    bugMapMap
+ | y < 0 =
+  Map.findWithDefault 0 (2,1) $
+   Map.findWithDefault Map.empty (level - 1)
+    bugMapMap
+ | y > day24a_yMax =
+  Map.findWithDefault 0 (2,3) $
+   Map.findWithDefault Map.empty (level - 1)
+    bugMapMap
+ | x == 2 && y == 2 && direction == 0 = -- north to south
+   sum $
+    map
+     (\x ->
+      Map.findWithDefault 0 (x,day24a_yMax) $
+       Map.findWithDefault Map.empty (level + 1)
+        bugMapMap)
+     [0..day24a_xMax]
+ | x == 2 && y == 2 && direction == 1 = -- east to west
+  sum $
+   map
+    (\y ->
+     Map.findWithDefault 0 (0,y) $
+      Map.findWithDefault Map.empty (level + 1)
+       bugMapMap)
+    [0..day24a_yMax]
+ | x == 2 && y == 2 && direction == 2 = -- south to north
+  sum $
+   map
+    (\x ->
+     Map.findWithDefault 0 (x,0) $
+      Map.findWithDefault Map.empty (level + 1)
+       bugMapMap)
+    [0..day24a_xMax]
+ | x == 2 && y == 2 && direction == 3 = -- west to east
+  sum $
+   map
+    (\y ->
+     Map.findWithDefault 0 (day24a_xMax,y) $
+      Map.findWithDefault Map.empty (level + 1)
+       bugMapMap)
+    [0..day24a_yMax]
+ | otherwise =
+  Map.findWithDefault 0 (x,y) $
+   Map.findWithDefault Map.empty level
+    bugMapMap
+     
+day24b_map = Map.fromList day24b_assocList
+
+day24b_assocList :: [((Int,Int),Int)]
+day24b_assocList = delete ((2,2),0) day24b_assocList
+
+day24b_coords = [(x,y) | y <- [0..day24a_yMax], x <- [0..day24a_xMax], x /= 2 || y /= 2]
