@@ -2665,3 +2665,45 @@ day24b_assocList :: [((Int,Int),Int)]
 day24b_assocList = delete ((2,2),0) day24b_assocList
 
 day24b_coords = [(x,y) | y <- [0..day24a_yMax], x <- [0..day24a_xMax], x /= 2 || y /= 2]
+
+-- Day 25b
+
+-- Day 23a
+
+-- (intMap, "Halt", opCode, position, relativeBase, input, output)
+
+-- day25a = last day25a_output
+
+day25a = day25a_init
+
+day25a_init =
+ do
+  let
+   output = day25a_calc (cICC_init data_day25a,0,0) []
+   state = fst output
+   string = snd output
+  putStrLn string
+  day25a_loop state
+  return ()
+
+day25a_loop state =
+ do
+  input <- getLine
+  let
+   output = day25a_calc state $ map ord $ input ++ "\n"
+   newState = fst output
+   string = snd output
+  putStrLn string
+  day25a_loop newState
+  return ()
+ where
+  
+
+-- day25a_output
+
+-- day25a_input
+  
+day25a_calc (memory,position,offset) input =
+ (\(a,b,c,d,e,f,g) -> ((a,d,e),map chr $ reverse g)) output
+ where
+ output = cICC_output_raw memory position offset input
