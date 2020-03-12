@@ -11,6 +11,98 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
+-- Day 08b
+
+day08b = day08b_calcValue day08a_tree
+
+
+day08b_calcValue :: IntTree -> Int
+day08b_calcValue (IntBranch children metadata)
+ | children == [] =
+  sum metadata
+ | otherwise =
+  sum $ map (getValues children) metadata
+ where
+  getValues :: [IntTree] -> Int -> Int
+  getValues children reference
+   | element == Nothing =
+    0
+   | otherwise =
+    day08b_calcValue $ fromJust element
+   where
+    element = findInList (reference - 1) children
+
+-- Day 08a
+data IntTree =
+ IntBranch [IntTree] [Int]
+ deriving (Show, Eq)
+ 
+day08a = day08a_sumMetadata day08a_tree
+ 
+day08a_sumMetadata (IntBranch children metadata) =
+ childrenSum + metadataSum
+ where
+  childrenSum = sum $ map day08a_sumMetadata children
+  metadataSum = sum metadata
+ 
+day08a_tree = snd $ day08a_getBranch $ Seq.fromList data08
+
+-- (length,tree)
+day08a_getBranch :: Seq.Seq Int -> (Int,IntTree)
+day08a_getBranch sequence =
+ (length,IntBranch childList metadataList)
+ where
+ children = Seq.index sequence 0
+ metadata = Seq.index sequence 1
+ output =
+  unzip $ day08a_spoolChildren children $ Seq.drop 2 sequence
+ childrenLength = sum $ fst output
+ length = 2 + childrenLength + metadata
+ childList = snd output
+ metadataList =
+  toList $ Seq.take metadata $
+   Seq.drop (2 + childrenLength) sequence
+ 
+day08a_spoolChildren :: Int -> Seq.Seq Int -> [(Int,IntTree)]
+day08a_spoolChildren 0 _ = []
+day08a_spoolChildren n sequence =
+ output:(day08a_spoolChildren (n - 1) $ Seq.drop length sequence)
+ where
+  output = day08a_getBranch sequence
+  length = fst output 
+  element = snd output
+
+
+-- Day 07b
+
+day07b = fst day07b_output
+
+day07b_output = day07b_calc 0 "" []
+
+day07b_calc t string workers
+ | length workers < 5 && possible /= [] =
+  day07b_calc t string $
+   (day07b_timeMap Map.! next,next):workers
+ | done /= [] =
+  day07b_calc t nextString rest
+ | workers == [] =
+  (t,string)
+ | otherwise =
+  day07b_calc (t + 1) string nextWorkers
+ where
+  added = string ++ (map snd workers)
+  possible =
+   filter
+    (\(a,b) -> all (`elem` string) b && notElem a added)
+    day07a_fullList
+  next = fst $ head possible
+  done = filter (\(a,b) -> a == 0) workers
+  rest = workers \\ done
+  nextString = string ++ (map snd done)
+  nextWorkers = map (\(a,b) -> (a - 1,b)) workers
+
+day07b_timeMap = Map.fromList $ zip ['A'..'Z'] [61..86]
+
 -- Day 07a
 
 day07a = reverse day07a_output
@@ -23,7 +115,10 @@ day07a_calc string
  | otherwise =
   day07a_calc $ (fst $ head possible):string
  where
-  possible = filter (\(a,b) -> all (`elem` string) b && notElem a string) day07a_fullList
+  possible =
+   filter
+    (\(a,b) -> all (`elem` string) b && notElem a string)
+    day07a_fullList
 
 
 day07a_fullList = assocList
@@ -395,3 +490,9 @@ manhattanDistance (Point x1 y1) (Point x2 y2) =
  abs (x1 - x2) + abs (y1 - y2)
  
 swap (a,b) = (b,a)
+
+findInList index list
+ | index < 0 || index >= length list =
+  Nothing
+ | otherwise =
+  Just $ list !! index
