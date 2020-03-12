@@ -4,11 +4,235 @@ import Data.Foldable
 import Data.Char
 import Data.Maybe
 import Data.Ord
+import Data.Function
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
+
+-- Day 07a
+
+day07a = reverse day07a_output
+
+day07a_output = day07a_calc ""
+
+day07a_calc string
+ | sort string == day07a_steps =
+  string
+ | otherwise =
+  day07a_calc $ (fst $ head possible):string
+ where
+  possible = filter (\(a,b) -> all (`elem` string) b && notElem a string) day07a_fullList
+
+
+day07a_fullList = assocList
+ where
+  assocList =
+   zip day07a_steps $
+    map (sort . nub . getList) day07a_steps
+  
+  getList step = direct ++ getRecursive direct
+   where
+    direct = Map.findWithDefault "" step day07a_directMap
+    
+  getRecursive step = concat $ map getList step
+
+day07a_directMap = Map.fromListWith (++) assocList
+ where
+  assocList = map (\[a,b] -> (b,[a])) day07a_pairs
+
+day07a_ends = ends \\ starts
+ where
+  starts = nub $ head day07a_transpose
+  ends = nub $ last day07a_transpose
+
+day07a_starts = starts \\ ends
+ where
+  starts = nub $ head day07a_transpose
+  ends = nub $ last day07a_transpose
+
+day07a_steps = sort $ nub $ concat day07a_transpose
+day07a_transpose = transpose day07a_pairs
+day07a_pairs = map (filter (isUpper) . tail) day07a_split
+
+day07a_split = splitOn ';' data07
+
+-- Day 06b
+
+day06b = length day06b_output
+
+day06b_output = filter (\(a,b) -> b < 10000) day06b_distanceAssoc
+
+day06b_distanceAssoc = zip field $ map getDistanceSum field
+ where
+  field = day06a_field
+  getDistanceSum p = sum distances
+   where
+    distances = map (manhattanDistance p) day06a_points
+
+-- Day 06a
+
+day06a = snd $ last day06a_output
+
+day06a_output = sortBy (comparing snd) assocList
+ where
+  eligablePoints = day06a_points \\ day06a_infinitePoints
+  assocList =
+   zip eligablePoints $
+    map (day06a_areas Map.!) eligablePoints
+  
+
+day06a_infinitePoints =
+ map fromJust $
+  nub $ filter (/= Nothing) $
+   map (day06a_closestMap Map.!) day06a_edgeCoords
+  
+
+day06a_edgeCoords =
+ [p |
+  p@(Point x y) <- field,
+  x == xMin || x == xMax || y == yMin || y == yMax]
+ where
+  field = day06a_field
+  xMin = day06a_xMin
+  xMax = day06a_xMax
+  yMin = day06a_yMin
+  yMax = day06a_yMax
+
+day06a_areas =
+ Map.fromListWith (+) $ map (\(a,b) -> (fromJust b,1)) $
+  filter (\(a,b) -> b /= Nothing) day06a_closestAssoc
+
+day06a_closestMap = Map.fromList day06a_closestAssoc
+
+day06a_closestAssoc = zip field $ map getClosest field
+ where
+  field = day06a_field
+  getClosest p
+   | length (head grouped) == 1 =
+    Just $ snd $ head $ head grouped
+   | otherwise =
+    Nothing
+   where
+    distances = map (manhattanDistance p) day06a_points
+    assocList = sort $ zip distances day06a_points
+    grouped = groupBy (equaling fst) assocList
+
+day06a_field =
+   [Point x y |
+    x <- [day06a_xMin..day06a_xMax],
+    y <- [day06a_yMin..day06a_yMax]]
+
+day06a_points = map (\[a,b] -> Point a b) day06a_spool
+
+day06a_xMin = minimum $ head day06a_xAndY
+day06a_xMax = maximum $ head day06a_xAndY
+day06a_yMin = minimum $ last day06a_xAndY
+day06a_yMax = maximum $ last day06a_xAndY
+
+day06a_xAndY = transpose day06a_spool
+
+day06a_spool = spoolList 2 data06
+
+-- Day 05b
+
+day05b = length $ snd $ head day05b_output
+
+day05b_output = sortBy (comparing $ length . snd) $ zip chars (map (day05a_process 0) inputList)
+ where
+  chars = transpose [['A'..'Z'],['a'..'z']]
+  inputList = day05b_inputList
+
+day05b_inputList = lists
+ where
+  chars = transpose [['A'..'Z'],['a'..'z']]
+  lists =
+   map (\x -> Seq.filter (`notElem` x) day05a_output) chars
+
+-- Day 05a
+
+day05a_output = day05a_process 0 day05a_input
+
+-- use sequence and step back after deleting
+
+day05a_process j sequence
+ | i + 1 == Seq.length sequence =
+  sequence
+ | toLower a /= toLower b || a == b =
+  day05a_process (i + 1) sequence
+ | toLower a == b || toUpper a == b =
+  day05a_process (i - 1) $
+   Seq.deleteAt i $
+    Seq.deleteAt i sequence
+ where
+  i = if j < 0 then 0 else j
+  a = Seq.index sequence i
+  b = Seq.index sequence $ i + 1
+ 
+day05a_length = length data05
+
+day05a_input = Seq.fromList data05
+
+-- Day 04b
+
+day04b = (fst day04b_output) * (head $ snd day04b_output)
+
+day04b_output =
+ maximumBy (comparing (length . snd)) day04b_mostMinuteAssoc
+
+day04b_mostMinuteAssoc = zip guardIds minuteMaximums
+ where
+  sleepingGuards =
+   filter (\x -> snd x /= []) $ Map.toList day04a_sleepMap
+  guardIds = fst $ unzip sleepingGuards
+  minuteLists =
+   map day04a_minuteList $ snd $ unzip sleepingGuards
+  minuteMaximums =
+   map (maximumBy (comparing length) . group . sort) minuteLists
+
+-- Day 04a
+
+day04a =  day04a_mostSleepID * day04a_mostSleepMinute
+
+day04a_mostSleepMinute =
+ head $ maximumBy (comparing length) $ group $ sort minuteList
+ where
+  minuteList =
+   day04a_minuteList $ day04a_sleepMap Map.! day04a_mostSleepID
+
+day04a_minuteList [] = []
+day04a_minuteList ((wake,length):next) =
+ [wake..wake + length - 1] ++ (day04a_minuteList next)
+ 
+
+day04a_mostSleepID = fst mostSleep
+ where
+  sleepSum = fmap (sum . snd . unzip) day04a_sleepMap
+  mostSleep = maximumBy (comparing snd) $ Map.toList sleepSum
+
+day04a_sleepMap = Map.fromListWith (++) day04a_assocList
+
+-- (guardId,minuteList)
+day04a_assocList = day04a_spoolGuards day04a_split
+
+day04a_spoolGuards [] = []
+day04a_spoolGuards (guard:list) =
+ (guardId,minuteList):(day04a_spoolGuards nextList)
+ where
+  guardId = read $ drop 12 $ filter isNumber guard :: Int
+  split = break (\x -> elem 'G' x) list
+  minuteList = getMinutes $ fst split
+  nextList = snd split
+  
+  getMinutes [] = []
+  getMinutes (sleep:wake:next) =
+   (sleepMinute,wakeMinute - sleepMinute):(getMinutes next)
+   where
+    sleepMinute = read $ drop 10 $ filter isNumber sleep :: Int
+    wakeMinute  = read $ drop 10 $ filter isNumber wake :: Int
+  
+day04a_split = sort $ splitOn ';' data04
 
 -- Day 03b
 
@@ -161,3 +385,13 @@ splitOn element list =
     then []:acc
     else (x:acc_h):acc_t)
   [[]] list
+  
+spoolList n [] = []
+spoolList n list = (take n list):(spoolList n (drop n list))
+
+equaling f a b = f a == f b
+
+manhattanDistance (Point x1 y1) (Point x2 y2) =
+ abs (x1 - x2) + abs (y1 - y2)
+ 
+swap (a,b) = (b,a)
