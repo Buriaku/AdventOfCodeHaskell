@@ -11,10 +11,53 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
+-- Day 09b
+
+day09b = maximum $ Map.elems $ fst day09b_output
+
+day09b_output =
+ day09a_step
+  (day09a_highestMarble * 100) 1 0
+  (Seq.singleton 0) Map.empty
+
+-- Day 09a
+
+day09a = maximum $ Map.elems $ fst day09a_output
+
+day09a_output =
+ day09a_step day09a_highestMarble 1 0 (Seq.singleton 0) Map.empty
+
+day09a_step end marble curr sequence scoreMap
+ | end `seq` marble `seq` curr
+    `seq` sequence `seq` scoreMap `seq` False =
+  undefined
+ | mod marble 23 == 0 && marble /= 0 = -- cache in
+  day09a_step end
+   (marble + 1) (mod (mod (curr - 7) l) $ l - 1)
+   (Seq.deleteAt (mod (curr - 7) l) sequence) $
+   Map.insertWith (+)
+    (mod marble day09a_players)
+    (marble + (Seq.index sequence $ mod (curr - 7) l))
+    scoreMap
+ | marble > end = -- done
+  (scoreMap,sequence)
+ | otherwise = -- place next marble
+  day09a_step end
+   (marble + 1) (mod (curr + 2) l)
+   (Seq.insertAt (mod (curr + 2) l) marble sequence)
+   scoreMap
+  where
+   l = Seq.length sequence
+
+day09a_players = read $ head day09a_input :: Int
+day09a_highestMarble = read $ last day09a_input :: Int
+
+day09a_input =
+ map (filter isNumber) $ splitOn ';' data09
+
 -- Day 08b
 
 day08b = day08b_calcValue day08a_tree
-
 
 day08b_calcValue :: IntTree -> Int
 day08b_calcValue (IntBranch children metadata)
