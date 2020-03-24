@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 import Data.List
 import Data.Array
 import Data.Foldable
@@ -10,6 +12,425 @@ import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
+
+-- Day 13b
+
+day13b = point
+ where
+  output = day13b_iterate 0 day13a_carts
+  point = (\(Cart p _ _) -> p) $ snd output 
+ 
+day13b_iterate n carts
+ | length nextCarts == 1 =
+  (n,head nextCarts)
+ | otherwise =
+  day13b_iterate (n + 1) nextCarts
+ where
+  nextCarts = day13b_step (day13a_sort carts) []
+
+day13b_step [] prevCarts = prevCarts
+day13b_step (current:nextCarts) prevCarts =
+ day13b_step newNextCarts newPrevCarts
+ where
+  updated = day13a_move current
+  crash = day13b_check updated (nextCarts ++ prevCarts)
+  newNextCarts = nextCarts \\ crash
+  newPrevCarts = (updated:prevCarts) \\ crash
+
+day13b_check a [] = []
+day13b_check cart@(Cart p1 _ _) (current@(Cart p2 _ _):next)
+ | p1 == p2 =
+  [cart,current]
+ | otherwise =
+  day13b_check cart next
+
+-- Day 13a
+
+data Track =
+ Horizontal | Vertical |
+ NorthWest | SouthWest | NorthEast | SouthEast |
+ Crossing
+ deriving (Show, Eq)
+
+data Turning =
+ Counterclockwise | Straight | Clockwise
+ deriving (Show, Eq)
+
+data Direction =
+ North | East | South | West
+ deriving (Show, Eq)
+
+data Cart =
+ Cart Point Direction Turning
+ deriving (Show, Eq)
+
+day13a = point
+ where
+  output = day13a_iterate 0 day13a_carts
+  point = (\(Cart p _ _) -> p) $ head $ snd output
+ 
+day13a_iterate n carts
+ | crashed =
+  (n,nextCarts)
+ | otherwise =
+  day13a_iterate (n + 1) nextCarts
+ where
+  (crashed,nextCarts) = day13a_step (day13a_sort carts) []
+
+day13a_step [] prevCarts = (False,prevCarts)
+day13a_step (current:nextCarts) prevCarts
+ | crashed =
+  (True,updated:prevCarts)
+ | otherwise =
+  day13a_step nextCarts $ updated:prevCarts
+ where
+  updated = day13a_move current
+  crashed =
+   day13a_check updated prevCarts || 
+   day13a_check updated nextCarts
+   
+day13a_check _ [] = False
+day13a_check cart@(Cart p1 _ _) ((Cart p2 _ _):next)
+ | p1 == p2 =
+  True
+ | otherwise =
+  day13a_check cart next
+ 
+  
+day13a_move cart@(Cart point@(Point x y) direction turning)
+ | track == Vertical || track == Horizontal =
+  Cart nextPoint direction turning
+ | track == NorthWest && direction == South =
+  Cart nextPoint West turning
+ | track == NorthWest =
+  Cart nextPoint North turning
+ | track == NorthEast && direction == South =
+  Cart nextPoint East turning
+ | track == NorthEast =
+  Cart nextPoint North turning
+ | track == SouthWest && direction == North =
+  Cart nextPoint West turning
+ | track == SouthWest =
+  Cart nextPoint South turning
+ | track == SouthEast && direction == North =
+  Cart nextPoint East turning
+ | track == SouthEast =
+  Cart nextPoint South turning
+ | track == Crossing && turning == Straight =
+  Cart nextPoint direction nextTurning
+ | track == Crossing =
+  Cart nextPoint nextDirection nextTurning
+ where
+  nextPoint = movePoint point direction
+  track = day13a_trackMap Map.! nextPoint
+  nextDirection = turnDirection direction turning
+  nextTurning = day13a_nextTurning turning
+
+day13a_nextTurning Counterclockwise = Straight
+day13a_nextTurning Straight = Clockwise
+day13a_nextTurning Clockwise = Counterclockwise
+
+day13a_sort carts =
+ sortBy
+  (\(Cart (Point a b) _ _) (Cart (Point c d) _ _) ->
+   compare (b,a) (d,c))
+  carts
+
+
+day13a_carts =
+ map day13a_getCart $
+  filter (\(a,b) -> elem b "^v<>") day13a_list
+
+day13a_getCart (p,char)
+ | char == '<' =
+  Cart p West Counterclockwise
+ | char == '>' =
+  Cart p East Counterclockwise
+ | char == '^' =
+  Cart p North Counterclockwise
+ | char == 'v' =
+  Cart p South Counterclockwise
+
+day13a_trackMap =
+ Map.fromList $ map day13a_toTrack day13a_list
+ 
+day13a_toTrack (p,char) = (p,track)
+ where
+  north = Map.findWithDefault ' ' (movePoint p North) day13a_map
+  east = Map.findWithDefault ' ' (movePoint p East) day13a_map
+  west = Map.findWithDefault ' ' (movePoint p West) day13a_map 
+  track
+   | elem char "|^v" =
+    Horizontal
+   | elem char "-<>" =
+    Vertical
+   | char == '+' =
+    Crossing
+   | char == '/' && elem north "+|" && elem west "+-" =
+    NorthWest
+   | char == '/' =
+    SouthEast
+   | char == '\\' && elem north "+|" && elem east "+-" =
+    NorthEast
+   | char == '\\' =
+    SouthWest
+    
+    
+day13a_map = Map.fromList day13a_list
+ 
+day13a_list = filter (\(a,b) -> b /= ' ') assocList
+ where
+  coords = [Point x y | y <- [0..day13a_yMax], x <- [0..day13a_xMax]]
+  assocList = zip coords $ concat day13a_split
+
+day13a_xMax = (length $ head day13a_split) - 1
+day13a_yMax = (length day13a_split) - 1
+day13a_xLength = length $ head day13a_split
+day13a_yLength = length day13a_split
+
+day13a_split = splitOn ';' data13
+
+-- Day 12b
+
+day12b = day12b_getSum index list
+ where
+  (referenceIndex,list) = day12b_output 1000
+  offset = 1000 - referenceIndex
+  index = 50000000000 - offset
+
+day12b_getSum index list = sum $ fst $ unzip filtered
+ where
+  zipped = zip [index..] list
+  filtered = filter (\(a,b) -> b == 1) zipped
+
+day12b_output n = (index,trimmed)
+ where
+  output = day12a_iterate n 0 day12a_initial
+  index = fst output
+  list = snd output
+
+  zipped = zip [index..] list
+  filtered = filter (\(a,b) -> b == 1) zipped
+  
+  trimmed =
+   reverse $ snd $
+    break (/= 0) $ reverse list
+  
+  string = filter isNumber $ show trimmed
+
+-- Day 12a
+
+day12a = sum $ fst $ unzip filtered
+ where
+  index = fst day12a_output
+  list = snd day12a_output
+  zipped = zip [index..] list
+  filtered = filter (\(a,b) -> b == 1) zipped
+
+day12a_output = day12a_iterate 20 0 day12a_initial
+
+day12a_iterate 0 index list = (index,list)
+day12a_iterate n index list =
+ day12a_iterate (n - 1) nextIndex nextList
+ where
+  nextListRaw = day12a_fold $ 0:0:0:0:0:list
+  nextListSplit = break (/= 0) nextListRaw
+  nextList = snd nextListSplit
+  nextIndex = index - 3 + (length $ fst nextListSplit)
+  
+day12a_fold list         
+ | list == [] || list == [0,0,0,0,0] =
+  [output]
+ | otherwise =
+  output:(day12a_fold $ tail list)
+ where
+  binary = takeWithDefault 0 5 list
+  number = fromBinaryList binary
+  output =
+   if elem number day12a_rules
+    then 1
+    else 0
+
+day12a_initial =
+ map (\x -> if x == '#' then 1 else 0) day12a_initialString
+day12a_initialString = filter (`elem` "#.") $ head day12a_split
+
+day12a_rules :: [Int]
+day12a_rules =
+ map fromBinaryList $
+  map (map (\x -> if x == '#' then 1 else 0)) $
+   fst $ unzip day12a_rulesString
+
+day12a_rulesString =
+ filter (\(a,b) -> b == "#") $
+  map (splitAt 5) $
+   map (filter (`elem` "#.")) $
+    drop 2 day12a_split
+
+day12a_split = splitOn ';' data12
+
+-- Day 11b
+
+day11b = maximumBy (comparing snd) $ day11b_output
+ -- $ Map.toList day11b_output
+
+day11b_output =
+ takeWhileAscendingBy (comparing snd) $
+  day11b_iterate 2 Map.empty
+
+day11b_iterate n (!squareMap)
+ | n > 300 =
+  [] -- squareMap
+ | otherwise =
+  maximum:(day11b_iterate (n + 1) newSquareMap)
+ where
+  assocList = day11b_sums n squareMap
+  maximum = maximumBy (comparing snd) assocList
+  newSquareMap =
+   foldl (\acc (k,v) -> Map.insert k v acc) squareMap assocList
+  
+
+day11b_sums n squareMap =
+ assocList
+ where
+  coords =
+   [(Point x y,n) | x <- [1..301 - n], y <- [1..301 - n]]
+  assocList =
+   map (day11b_getSum squareMap) coords
+  
+day11b_getSum squareMap (p@(Point x y),n)
+ | n == 2 =
+  ((p,n),sumTwo)
+ | even n =
+  ((p,n),sumModTwo)
+ | otherwise =
+  ((p,n),sumElse)
+  where
+   -- n == 2
+   listTwo =
+    [Point px py | px <- [x,x + 1], py <- [y,y + 1]]
+   sumTwo = day11b_sumList listTwo
+   
+   -- n even
+   nDiv = div n 2
+   sumModTwo =
+    sum $
+     map (squareMap Map.!)
+      [(p,nDiv) | p <-
+       [Point px py |
+        px <- [x,x + nDiv], py <- [y,y + nDiv]]]
+   
+   -- otherwise
+   sumMinus = squareMap Map.! (p,n-1)
+   elseList =
+    [Point px py |
+     px <- [x..x + n - 1], py <- [y..y + n - 1],
+     px == x + n - 1 || py == y + n - 1]
+   elseSum = day11b_sumList elseList
+   sumElse = sumMinus + elseSum
+
+day11b_sumList list =
+ sum $ map (day11a_matrix Map.!) list
+
+-- Day 11a
+
+day11a = maximumBy (comparing snd) day11a_sums
+
+day11a_sums = zip day11a_squares $ map day11a_getSums day11a_squares
+
+day11a_getSums (Point x y) = summed
+ where
+  point00 = day11a_matrix Map.! (Point x y)
+  point01 = day11a_matrix Map.! (Point x (y + 1))
+  point02 = day11a_matrix Map.! (Point x (y + 2))
+  point10 = day11a_matrix Map.! (Point (x + 1) y)
+  point11 = day11a_matrix Map.! (Point (x + 1) (y + 1))
+  point12 = day11a_matrix Map.! (Point (x + 1) (y + 2))
+  point20 = day11a_matrix Map.! (Point (x + 2) y)
+  point21 = day11a_matrix Map.! (Point (x + 2) (y + 1))
+  point22 = day11a_matrix Map.! (Point (x + 2) (y + 2))
+  
+  summed =
+   point00 + point01 + point02 +
+   point10 + point11 + point12 +
+   point20 + point21 + point22
+
+day11a_matrix =
+ Map.fromList $
+  zip
+   day11a_coords $
+   map day11a_powerLevel day11a_coords
+
+day11a_powerLevel (Point x y) = output
+ where
+  rackID = x + 10
+  step1 = rackID * y
+  step2 = step1 + day11a_serialNumber
+  step3 = step2 * rackID
+  step4 = mod (div step3 100) 10
+  output = step4 - 5
+
+day11a_squares = [Point x y | x <- [1..298], y <- [1..298]]
+day11a_coords = [Point x y | x <- [1..300], y <- [1..300]]
+
+day11a_serialNumber = data11
+
+-- Day 10b
+
+day10b = fst day10a_calc
+
+-- Day 10a
+
+day10a = day10a_print
+
+day10a_print =
+  do
+  mapM putStrLn day10a_string
+  return ()
+
+day10a_string =
+ [[Map.findWithDefault '.' (Point x y) day10a_map |
+   x <- [xMin..xMax]] | y <- [yMin..yMax]]
+
+ where
+  (xMin,yMin,xMax,yMax) = pointListMinMax day10a_output
+
+day10a_map = Map.fromList $ zip day10a_output $ repeat '#'
+
+day10a_output = snd day10a_calc
+
+day10a_calc = day10a_step 0 day10a_points day10a_velocities 0
+
+day10a_step i points velocities currArea
+ | nextArea > currArea && currArea /= 0 =
+  (i,points)
+ | otherwise =
+  day10a_step (i + 1) nextPoints velocities nextArea
+ where
+  nextPoints =
+   map
+    (\(a,b) -> addPoints a b) $
+    zip points velocities
+  minMax = pointListMinMax nextPoints
+  
+  nextArea =
+   (\(a,b,c,d) -> (c - a) * (d - b)) minMax
+
+day10a_points = head day10a_trans
+day10a_velocities = last day10a_trans
+
+day10a_trans = transpose day10a_pairs
+
+day10a_pairs =
+ spoolList 2 $
+  map (\[a,b] -> Point a b) $ spoolList 2 day10a_read
+
+day10a_read :: [Int]
+day10a_read =
+ map read $
+  map (filter (\x -> isNumber x || x == '-')) day10a_split
+  
+day10a_split = tail $ splitOnList "<," data10
 
 -- Day 09b
 
@@ -27,10 +448,8 @@ day09a = maximum $ Map.elems $ fst day09a_output
 day09a_output =
  day09a_step day09a_highestMarble 1 0 (Seq.singleton 0) Map.empty
 
-day09a_step end marble curr sequence scoreMap
- | end `seq` marble `seq` curr
-    `seq` sequence `seq` scoreMap `seq` False =
-  undefined
+-- force sequence to be evaluated
+day09a_step end marble curr (!sequence) scoreMap
  | mod marble 23 == 0 && marble /= 0 = -- cache in
   day09a_step end
    (marble + 1) (mod (mod (curr - 7) l) $ l - 1)
@@ -523,6 +942,15 @@ splitOn element list =
     then []:acc
     else (x:acc_h):acc_t)
   [[]] list
+
+splitOnList :: Eq a => [a] -> [a] -> [[a]]
+splitOnList elementList list =
+ foldr
+  (\x acc@(acc_h:acc_t) ->
+   if elem x elementList
+    then []:acc
+    else (x:acc_h):acc_t)
+  [[]] list
   
 spoolList n [] = []
 spoolList n list = (take n list):(spoolList n (drop n list))
@@ -539,3 +967,55 @@ findInList index list
   Nothing
  | otherwise =
   Just $ list !! index
+  
+addPoints (Point x1 y1) (Point x2 y2) = Point (x1 + x2) (y1 + y2)
+
+pointListMinMax list =
+ foldl getMinMax
+    ((\(Point a b) -> (a,b,a,b)) $ head list) $
+    tail list
+ where
+  getMinMax (xMin,yMin,xMax,yMax) (Point x y) =
+   (minX,minY,maxX,maxY)
+   where
+    minX = if x < xMin then x else xMin
+    minY = if y < yMin then y else yMin
+    maxX = if x > xMax then x else xMax
+    maxY = if y > yMax then y else yMax
+
+takeWhileAscendingBy f [] = []    
+takeWhileAscendingBy f [x1] = [x1]
+takeWhileAscendingBy f (x1:x2:xs)
+ | f x1 x2 /= GT =
+  x1:(takeWhileAscendingBy f (x2:xs))
+ | otherwise =
+  [x1]
+  
+-- from big endian binary list
+fromBinaryList list = getFromBinaryList 1 list
+getFromBinaryList :: Int -> [Int] -> Int
+getFromBinaryList n [0] = 0
+getFromBinaryList n [1] = n
+getFromBinaryList n (current:next) =
+ current * n + getFromBinaryList (n * 2) next
+ 
+takeWithDefault def n list
+ | length list < n =
+  take n $ list ++ (replicate n def)
+ | otherwise =
+  take n list
+  
+movePoint (Point x y) North = (Point x (y - 1))
+movePoint (Point x y) South = (Point x (y + 1))
+movePoint (Point x y) West = (Point (x - 1) y)
+movePoint (Point x y) East = (Point (x + 1) y)
+
+turnDirection North Clockwise = East 
+turnDirection East Clockwise = South
+turnDirection South Clockwise = West
+turnDirection West Clockwise = North
+
+turnDirection North Counterclockwise = West
+turnDirection East Counterclockwise = North
+turnDirection South Counterclockwise = East
+turnDirection West Counterclockwise = South
