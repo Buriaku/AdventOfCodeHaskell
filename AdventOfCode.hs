@@ -1,4 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 
 import Data.List
 import Data.Array
@@ -10,8 +12,324 @@ import Data.Function
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
+import qualified Data.HashPSQ as HPSQ
+
+import GHC.Generics (Generic)
+import Data.Hashable
 
 import AdventOfCodeData
+
+-- Day 15a
+
+data Cave =
+ Wall | Floor
+ deriving (Show, Eq)
+
+-- creature position health elf/goblin
+data Creature =
+ Creature Point Int Kind
+ deriving (Show, Eq)
+ 
+data Kind =
+ Elf | Goblin
+ deriving (Show, Eq, Ord)
+ 
+day15a = fullRounds * hpSum
+ where
+  (rounds,n,creatures) = last day15a_output
+  fullRounds = rounds - 1
+  hpSum = sum $ map (\(Creature _ hp _) -> hp) creatures
+  
+day15a_output = day15a_iterate 1 day15a_creatures
+
+day15a_print =
+  do
+  mapM putStrLn $ concat $ map day15a_string day15a_output
+  return ()
+
+day15a_string (n,_,creatures) = "":(show n):(show creatureHP):strings
+ where
+  creaturePos = map (\(Creature p _ _) -> p) creatures
+  creatureHP = map (\(Creature _ h _) -> h) creatures
+  creatureChar =
+   map (\(Creature _ _ k) -> day15a_kindToChar k) creatures
+  creatureMap = Map.fromList $ zip creaturePos creatureChar 
+  
+  strings =
+   [[Map.findWithDefault
+     (day15a_caveToChar $ day15a_caveMap Map.! (Point x y))
+     (Point x y) creatureMap |
+      x <- [0..day15a_xMax]] | y <- [0..day15a_yMax]]
+ 
+day15a_iterate n creatures
+ | ended =
+  [(n,length nextCreatures,nextCreatures)]
+ | otherwise =
+  (n,length nextCreatures,nextCreatures):(day15a_iterate (n + 1) nextCreatures)
+ where
+  (ended,nextCreatures) = day15a_doStep creatures
+    
+day15a_doStep creatures =
+ day15a_step False creatures creatures
+
+day15a_step ended [] creatures = (ended,day15a_sortCreatures creatures)
+day15a_step ended (current@(Creature pos hp kind):restQueue) creatures =
+ day15a_step newEnded nextQueue nextCreatures
+  where
+   -- common
+   others = delete current creatures
+   blocked = day15a_getPos others
+   
+   enemies = filter (\(Creature _ _ k) -> k /= kind) others
+   enemyPos = day15a_getPos enemies
+   
+   newEnded
+    | ended     = ended
+    | otherwise = enemies == []
+   
+   targets = concat $ map (day15a_options blocked) enemyPos
+   
+   -- move
+   posMoved = day15a_move blocked targets pos
+   
+   currentMoved = Creature posMoved hp kind
+   
+   -- attack
+   
+   inPosition = elem posMoved targets
+   
+   (target,harmed)
+    | inPosition =
+     day15a_attack enemies posMoved
+    | otherwise =
+     (current,current) -- dummy value
+   
+   -- cleanup   
+   nextCreatures
+    | inPosition && day15a_isDead harmed =
+     currentMoved:(delete target others)
+    | inPosition =
+     currentMoved:harmed:(delete target others)
+    | otherwise =
+     currentMoved:others
+   
+   nextQueue
+    | inPosition && day15a_isDead harmed =
+     delete harmed restQueue
+    | inPosition =
+     map
+      (\c -> if c == target then harmed else c)
+      restQueue
+    | otherwise =
+     restQueue
+
+day15a_move blocked targets pos = nextPos
+ where
+  path = day15a_getPath blocked targets pos
+  
+  nextPos
+   | length path < 2 = pos
+   | otherwise       = last $ init path
+
+day15a_attack enemies pos = (target,harmed)
+ where
+  inReach =
+   filter
+    (\(Creature p _ _) -> (manhattanDistance p pos) == 1)
+    enemies
+  
+  minimumHP =
+   minimum $ map
+    (\(Creature _ hp _) -> hp)
+    inReach
+    
+  filteredByHP =
+   filter
+    (\(Creature _ h _) -> h == minimumHP)
+    inReach
+  
+  target = head $ day15a_sortCreatures filteredByHP
+  harmed = day15a_harmCreature target 3
+
+day15a_harmCreature (Creature pos hp kind) damage =
+ Creature pos (hp - damage) kind
+
+day15a_isDead (Creature _ hp _) = hp < 1
+
+day15a_getPos creatures =
+ map (\(Creature pos _ _) -> pos) creatures
+
+day15a_getPath blocked targets pos@(Point x y)
+ | elem pos targets = [pos]
+ | options == [] = []
+ | otherwise =
+  day15a_queuingAlgorithm blocked targets (pos:options) hashPSQ
+ where
+  options = day15a_options blocked pos
+  hashPSQ =
+   foldl 
+    (\acc p@(Point x y) -> HPSQ.insert p (1,y,x,y,x) [p,pos] acc)
+    HPSQ.empty
+    options    
+
+day15a_queuingAlgorithm blocked targets visited hashPSQ
+ | elem pos targets =
+  path
+ | HPSQ.null nextHashPSQ = -- no options left and no targets reached
+  []
+ | otherwise =
+  day15a_queuingAlgorithm blocked targets nextVisited nextHashPSQ
+ where
+  (pos,(distance,y1,x1,_,_),path) = fromJust $ HPSQ.findMin hashPSQ
+  
+  options = (day15a_options blocked pos) \\ visited
+  
+  nextVisited = options ++ visited
+  
+  -- nextPaths :: [[Point]]
+  nextPaths = map (:path) options
+  
+  nextKPVAssocs =
+   map (\path@(head@(Point x y):_) -> (head,(distance + 1,y1,x1,y,x),path)) nextPaths
+  
+  hashPSQCleared =
+   HPSQ.delete pos hashPSQ
+  
+  nextHashPSQ =
+   foldl (\acc (k,p,v) -> HPSQ.insert k p v acc)
+    hashPSQCleared nextKPVAssocs
+
+day15a_options blocked pos =
+ (filter day15a_isFloor $ adjacentPoints pos) \\ blocked      
+
+day15a_sortCreatures creatures =
+ sortBy
+  (\(Creature (Point a b) _ _) (Creature (Point c d) _ _) ->
+   compare (b,a) (d,c))
+   creatures
+   
+day15a_creatures = creatures
+ where
+  filteredList = filter ((`elem` "EG") . snd) day15a_list
+  creatures =
+   map
+    (\(p,char) -> Creature p 200 $ day15a_charToKind char)
+    filteredList
+
+day15a_charToKind 'E' = Elf
+day15a_charToKind 'G' = Goblin
+
+day15a_kindToChar Elf = 'E'
+day15a_kindToChar Goblin = 'G'
+    
+day15a_isFloor p
+ | cave == Floor = True
+ | otherwise = False
+ where
+  cave = day15a_caveMap Map.! p
+
+day15a_caveMap = fmap charToCave $ Map.fromList day15a_list
+ where
+  charToCave char
+   | elem char ".EG" =
+    Floor
+   | otherwise =
+    Wall
+    
+day15a_caveToChar Floor = '.'
+day15a_caveToChar Wall  = '#'
+ 
+day15a_list = assocList
+ where
+  coords = [Point x y | y <- [0..day15a_yMax], x <- [0..day15a_xMax]]
+  assocList = zip coords $ concat day15a_split
+
+day15a_xMax = (length $ head day15a_split) - 1
+day15a_yMax = (length day15a_split) - 1
+day15a_xLength = length $ head day15a_split
+day15a_yLength = length day15a_split
+
+day15a_split = splitOn ';' data15
+
+-- Day 14b
+
+day14b = (last day14b_output) - day14b_len
+
+day14b_output = day14b_iterate 0 1 day14a_start day14a_len
+
+day14b_iterate elfIndex1 elfIndex2 sequence len
+ -- | failed =
+ -- error $ "lengths don't match: " ++ (show day14b_len) ++ " " ++ (show nextLen) ++ " " ++ (show $ length sequenceTail1) 
+ | sequenceTail1 == day14b_seq =
+  [nextLen]
+ | sequenceTail2 == day14b_seq =
+  [nextLen-1]
+ | mod len 100000 == 0 =
+  len:(day14b_iterate nextElfIndex1 nextElfIndex2 nextSequence nextLen)
+ | otherwise =
+  day14b_iterate nextElfIndex1 nextElfIndex2 nextSequence nextLen
+ where
+  recipeElf1 = Seq.index sequence elfIndex1
+  recipeElf2 = Seq.index sequence elfIndex2
+  recipeSum = recipeElf1 + recipeElf2
+  
+  newRecipes
+   | recipeSum > 9 =
+    (\(a,b) -> [a,b]) $ divMod recipeSum 10
+   | otherwise =
+    [recipeSum]
+  
+  nextSequence = sequence Seq.>< (Seq.fromList newRecipes)
+  nextLen = len + (length newRecipes) 
+ 
+  nextElfIndex1 = mod (elfIndex1 + 1 + recipeElf1) nextLen
+  nextElfIndex2 = mod (elfIndex2 + 1 + recipeElf2) nextLen
+  
+  sequenceTail1 = Seq.drop (nextLen - day14b_len) nextSequence
+  sequenceTail2 =
+   Seq.take day14b_len $
+    Seq.drop (nextLen - day14b_len - 1) nextSequence
+  
+  -- failed = day14b_len /= length sequenceTail && nextLen > day14b_len
+
+day14b_len = length day14b_seq
+
+day14b_seq :: Seq.Seq Int
+day14b_seq = Seq.fromList $ map (read . (:[])) $ show data14 
+
+-- Day 14a
+
+day14a = Seq.take 10 $ Seq.drop data14 day14a_output 
+
+day14a_output = day14a_iterate 0 1 day14a_start day14a_len
+
+day14a_iterate elfIndex1 elfIndex2 sequence len
+ | len >= data14 + 10 =
+  sequence
+ | otherwise =
+  day14a_iterate nextElfIndex1 nextElfIndex2 nextSequence nextLen
+ where
+  recipeElf1 = Seq.index sequence elfIndex1
+  recipeElf2 = Seq.index sequence elfIndex2
+  recipeSum = recipeElf1 + recipeElf2
+  
+  newRecipes
+   | recipeSum > 9 =
+    (\(a,b) -> [a,b]) $ divMod recipeSum 10
+   | otherwise =
+    [recipeSum]
+  
+  nextSequence = sequence Seq.>< (Seq.fromList newRecipes)
+  nextLen = len + (length newRecipes) 
+ 
+  nextElfIndex1 = mod (elfIndex1 + 1 + recipeElf1) nextLen
+  nextElfIndex2 = mod (elfIndex2 + 1 + recipeElf2) nextLen
+  
+day14a_len = length day14a_start
+
+day14a_start = Seq.fromList [3,7]
+
+-- sequence Seq.|> element || sequence Seq.>< sequence
 
 -- Day 13b
 
@@ -809,7 +1127,9 @@ day03b_rectangleMap =
 
 data Point =
  Point Int Int
- deriving (Show, Eq, Ord)
+ deriving (Show, Eq, Ord, Generic)
+
+instance Hashable Point
 
 data Rectangle =
  Rectangle Point Int Int
@@ -1006,9 +1326,9 @@ takeWithDefault def n list
   take n list
   
 movePoint (Point x y) North = (Point x (y - 1))
+movePoint (Point x y) East = (Point (x + 1) y)
 movePoint (Point x y) South = (Point x (y + 1))
 movePoint (Point x y) West = (Point (x - 1) y)
-movePoint (Point x y) East = (Point (x + 1) y)
 
 turnDirection North Clockwise = East 
 turnDirection East Clockwise = South
@@ -1019,3 +1339,8 @@ turnDirection North Counterclockwise = West
 turnDirection East Counterclockwise = North
 turnDirection South Counterclockwise = East
 turnDirection West Counterclockwise = South
+
+adjacentPoints p = map (movePoint p) [North,East,South,West]
+
+readingOrder points =
+ sortBy (\(Point a b) (Point c d) -> compare (b,a) (d,c)) points
