@@ -19,6 +19,64 @@ import Data.Hashable
 
 import AdventOfCodeData
 
+-- Day 15b
+
+day15b = fullRounds * hpSum
+ where
+  (weapon,rounds,elves,creatures) = last day15b_getOutput
+  fullRounds = rounds - 1
+  hpSum = sum $ map (\(Creature _ hp _) -> hp) creatures
+  
+day15b_getOutput = day15b_output 4
+  
+day15b_output weapon
+ | finalElves == day15b_elves =
+  output
+ | otherwise =
+  output ++ (day15b_output (weapon + 1))
+ where
+  output = day15b_iterate weapon 1 day15a_creatures
+  finalElves = (\(_,_,e,_) -> e) $ last output
+
+day15b_print =
+ do
+  mapM putStrLn $ concat $
+   map day15b_string day15b_getOutput
+  return ()
+
+day15b_string (weapon,n,elves,creatures) =
+ "":("Weapon: " ++ (show weapon) ++ ", Round: " ++ (show n) ++ ", Elves: " ++ (show elves)):strings
+ --(show creatureHP):strings
+ where
+  creaturePos = map (\(Creature p _ _) -> p) creatures
+  creatureHP = map (\(Creature _ h _) -> h) creatures
+  creatureChar =
+   map (\(Creature _ _ k) -> day15a_kindToChar k) creatures
+  creatureMap = Map.fromList $ zip creaturePos creatureChar 
+  
+  strings =
+   [[Map.findWithDefault
+     (day15a_caveToChar $ day15a_caveMap Map.! (Point x y))
+     (Point x y) creatureMap |
+      x <- [0..day15a_xMax]] | y <- [0..day15a_yMax]]
+ 
+day15b_iterate ::
+ Int -> Int -> [Creature] -> [(Int,Int,Int,[Creature])]
+day15b_iterate weapon n creatures
+ | ended || newElves < day15b_elves =
+  [(weapon,n,newElves,nextCreatures)]
+ | otherwise =
+  (weapon,n,newElves,nextCreatures):
+   (day15b_iterate weapon (n + 1) nextCreatures)
+ where
+  (ended,nextCreatures) = day15a_doStep weapon creatures
+  newElves = day15b_getElves nextCreatures
+   
+day15b_elves = day15b_getElves day15a_creatures
+ 
+day15b_getElves creatures =
+ length $ filter (\(Creature _ _ k) -> k == Elf) creatures
+
 -- Day 15a
 
 data Cave =
@@ -43,8 +101,23 @@ day15a = fullRounds * hpSum
 day15a_output = day15a_iterate 1 day15a_creatures
 
 day15a_print =
-  do
-  mapM putStrLn $ concat $ map day15a_string day15a_output
+ do
+  mapM putStrLn $ concat $
+   map day15a_string
+    ((0,length day15a_creatures,day15a_creatures):day15a_output)
+  return ()
+
+day15a_toFiles =
+ do
+  mapM day15a_toFile $
+   map day15a_string
+    ((0,length day15a_creatures,day15a_creatures):day15a_output)
+  return ()
+
+day15a_toFile strings =
+ do
+  writeFile ((head $ tail strings) ++ ".txt") $
+   concat $ map (++ "\n") $ (head $ tail strings):(tail $ tail $ tail strings)
   return ()
 
 day15a_string (n,_,creatures) = "":(show n):(show creatureHP):strings
@@ -67,14 +140,14 @@ day15a_iterate n creatures
  | otherwise =
   (n,length nextCreatures,nextCreatures):(day15a_iterate (n + 1) nextCreatures)
  where
-  (ended,nextCreatures) = day15a_doStep creatures
+  (ended,nextCreatures) = day15a_doStep 3 creatures
     
-day15a_doStep creatures =
- day15a_step False creatures creatures
+day15a_doStep weapon creatures =
+ day15a_step weapon False creatures creatures
 
-day15a_step ended [] creatures = (ended,day15a_sortCreatures creatures)
-day15a_step ended (current@(Creature pos hp kind):restQueue) creatures =
- day15a_step newEnded nextQueue nextCreatures
+day15a_step weapon ended [] creatures = (ended,day15a_sortCreatures creatures)
+day15a_step weapon ended (current@(Creature pos hp kind):restQueue) creatures =
+ day15a_step weapon newEnded nextQueue nextCreatures
   where
    -- common
    others = delete current creatures
@@ -100,7 +173,7 @@ day15a_step ended (current@(Creature pos hp kind):restQueue) creatures =
    
    (target,harmed)
     | inPosition =
-     day15a_attack enemies posMoved
+     day15a_attack weapon kind enemies posMoved
     | otherwise =
      (current,current) -- dummy value
    
@@ -115,7 +188,7 @@ day15a_step ended (current@(Creature pos hp kind):restQueue) creatures =
    
    nextQueue
     | inPosition && day15a_isDead harmed =
-     delete harmed restQueue
+     delete target restQueue
     | inPosition =
      map
       (\c -> if c == target then harmed else c)
@@ -131,7 +204,7 @@ day15a_move blocked targets pos = nextPos
    | length path < 2 = pos
    | otherwise       = last $ init path
 
-day15a_attack enemies pos = (target,harmed)
+day15a_attack weapon kind enemies pos = (target,harmed)
  where
   inReach =
    filter
@@ -149,7 +222,9 @@ day15a_attack enemies pos = (target,harmed)
     inReach
   
   target = head $ day15a_sortCreatures filteredByHP
-  harmed = day15a_harmCreature target 3
+  harmed
+   | kind == Elf = day15a_harmCreature target weapon
+   | otherwise   = day15a_harmCreature target 3
 
 day15a_harmCreature (Creature pos hp kind) damage =
  Creature pos (hp - damage) kind
@@ -163,37 +238,46 @@ day15a_getPath blocked targets pos@(Point x y)
  | elem pos targets = [pos]
  | options == [] = []
  | otherwise =
-  day15a_queuingAlgorithm blocked targets (pos:options) hashPSQ
+  day15a_queuingAlgorithm blocked targets [pos] hashPSQ
  where
   options = day15a_options blocked pos
   hashPSQ =
    foldl 
-    (\acc p@(Point x y) -> HPSQ.insert p (1,y,x,y,x) [p,pos] acc)
+    (\acc p@(Point x y) -> HPSQ.insert (p,y,x) (1,y,x,y,x) [p,pos] acc)
     HPSQ.empty
     options    
 
-day15a_queuingAlgorithm blocked targets visited hashPSQ
+day15a_queuingAlgorithm blocked targets checked hashPSQ
  | elem pos targets =
   path
  | HPSQ.null nextHashPSQ = -- no options left and no targets reached
   []
  | otherwise =
-  day15a_queuingAlgorithm blocked targets nextVisited nextHashPSQ
+  day15a_queuingAlgorithm blocked targets nextChecked nextHashPSQ
  where
-  (pos,(distance,y1,x1,_,_),path) = fromJust $ HPSQ.findMin hashPSQ
+  (key@(pos,y1,x1),(distance,_,_,_,_),path) = fromJust $ HPSQ.findMin hashPSQ
   
-  options = (day15a_options blocked pos) \\ visited
+  alreadyChecked = elem pos checked
   
-  nextVisited = options ++ visited
+  options
+   | alreadyChecked = []
+   | otherwise =
+    (day15a_options blocked pos)
+  
+  
+  nextChecked
+   | alreadyChecked = checked
+   | otherwise =
+    pos:checked
   
   -- nextPaths :: [[Point]]
   nextPaths = map (:path) options
   
   nextKPVAssocs =
-   map (\path@(head@(Point x y):_) -> (head,(distance + 1,y1,x1,y,x),path)) nextPaths
+   map (\path@(head@(Point x y):_) -> ((head,y1,x1),(distance + 1,y,x,y1,x1),path)) nextPaths
   
   hashPSQCleared =
-   HPSQ.delete pos hashPSQ
+   HPSQ.delete key hashPSQ
   
   nextHashPSQ =
    foldl (\acc (k,p,v) -> HPSQ.insert k p v acc)
