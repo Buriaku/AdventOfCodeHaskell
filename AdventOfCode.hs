@@ -9,15 +9,401 @@ import Data.Char
 import Data.Maybe
 import Data.Ord
 import Data.Function
+import Data.Bits
+import Control.Concurrent
+import Data.Hashable
+
+import GHC.Generics (Generic)
 
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.HashPSQ as HPSQ
 
-import GHC.Generics (Generic)
-import Data.Hashable
-
 import AdventOfCodeData
+
+-- Day 18b
+
+day18b = treeCount * lumberCount
+ where
+  output = day18b_output
+  elements = elems output
+  treeCount = length $ filter (== Trees) elements
+  lumberCount = length $ filter (== Lumber) elements
+
+ 
+day18b_output =
+ day18a_iterate
+  ((mod (day18b_time - day18b_init) day18b_period) + day18b_init)
+  day18a_woodArray
+
+day18b_period = (snd day18b_cycles) - day18b_init
+day18b_init = fst day18b_cycles
+
+day18b_cycles =
+ day18b_getPeriod 0 day18a_woodArray Map.empty
+
+day18b_getPeriod n woodArray prevArrayMap
+ | Map.member woodArray prevArrayMap =
+  (prevArrayMap Map.! woodArray,n)
+ | otherwise =
+  day18b_getPeriod (n + 1) nextWoodArray $
+     Map.insert woodArray n prevArrayMap
+ where
+  range = bounds woodArray
+  assocList = assocs woodArray
+  nextWoodArray =
+   array range $ map (day18a_update woodArray) assocList
+   
+day18b_time = 1000000000 :: Int
+
+-- Day 18a
+
+data Wood =
+ Ground | Trees | Lumber
+ deriving (Eq, Ord, Show)
+
+ 
+day18a = treeCount * lumberCount
+ where
+  output = day18a_output
+  elements = elems output
+  treeCount = length $ filter (== Trees) elements
+  lumberCount = length $ filter (== Lumber) elements
+
+ 
+day18a_output = day18a_iterate 10 day18a_woodArray
+
+day18a_iterate 0 woodArray = woodArray
+day18a_iterate n woodArray =
+ day18a_iterate (n - 1) nextWoodArray
+ where
+  range = bounds woodArray
+  assocList = assocs woodArray
+  nextWoodArray =
+   array range $ map (day18a_update woodArray) assocList
+
+day18a_update woodArray (p,wood)
+ | wood == Ground && treeCount > 2 =
+  (p,Trees)
+ | wood == Ground =
+  (p,Ground)
+ | wood == Trees && lumberCount > 2 =
+  (p,Lumber)
+ | wood == Trees =
+  (p,Trees)
+ | wood == Lumber && lumberCount > 0 && treeCount > 0 =
+  (p,Lumber)
+ | wood == Lumber =
+  (p,Ground)
+ where
+  candidates = day18a_sanitize $ surroundingPoints p
+  surrounding = map (woodArray !) candidates
+  treeCount = length $ filter (== Trees) surrounding
+  lumberCount = length $ filter (== Lumber) surrounding
+
+day18a_sanitize [] = []
+day18a_sanitize (p@(Point x y):rest)
+ | x >= 0 && y >= 0 && x <= day18a_xMax && y <= day18a_yMax =
+  p:(day18a_sanitize rest)
+ | otherwise =
+  day18a_sanitize rest
+ 
+day18a_woodArray =
+ array (Point 0 0,Point day18a_xMax day18a_yMax) day18a_list
+ 
+    
+-- day18a_woodToChar Floor = '.'
+-- day18a_woodToChar Wall  = '#'
+-- day18a_woodToChar Wall  = '#'
+ 
+day18a_list = assocList
+ where
+  coords =
+   [Point x y | y <- [0..day18a_yMax], x <- [0..day18a_xMax]]
+  assocList = zip coords $ map charToWood $ concat day18a_split
+  charToWood '.' = Ground
+  charToWood '|' = Trees
+  charToWood '#' = Lumber
+
+day18a_xMax = day18a_xLength - 1
+day18a_yMax = day18a_yLength - 1
+day18a_xLength = length $ head day18a_split
+day18a_yLength = length day18a_split
+
+day18a_split = splitOn ';' data18
+
+-- Day 17b
+
+day17b =
+ length $ filter (== Stagnant) $
+  Map.elems day17a_waterMap
+
+-- Day 17a
+
+data Flowstate =
+ Stagnant | Flowing
+ deriving (Eq, Show)
+
+day17a = (Map.size day17a_waterMap) - 1
+
+day17a_toFile =
+ do
+  writeFile "day17a.txt" $
+   concat $ map (++ "\n") day17a_getLines
+  return ()
+
+day17a_print =
+  do
+  mapM putStrLn day17a_getLines
+  return ()
+
+day17a_getLines =
+ [[Map.findWithDefault ' ' (Point x y) day17a_printMap |
+    x <- [day17a_xMin - 2..day17a_xMax + 2]] |
+     y <- [day17a_yMin - 2..day17a_yMax + 2]]
+
+day17a_printMap = Map.union water clay -- water
+ where
+  clay =
+   Map.fromList $ zip
+    day17a_pointsList $
+    repeat '#'
+  water =
+   fmap flowStateToChar day17a_waterMap
+  flowStateToChar Flowing  = '|' 
+  flowStateToChar Stagnant = '~'
+
+day17a_waterMap =
+ snd' $ day17a_flowDown Map.empty day17a_start
+
+day17a_cutoff = day17a_yMax
+ 
+day17a_start = Point 500 $ day17a_yMin - 1
+
+day17a_flowDown waterMap p@(Point x y)
+ | y > day17a_cutoff =
+  (Flowing,waterMap,[])
+ | Map.member p waterMap =
+  (checkedStatus,waterMap,[])
+ | isClay =
+  (Stagnant,waterMap,[])
+ | downStagnant && leftRightStagnant =
+  (Stagnant,newWaterMap,layer)
+ | downStagnant = 
+  (Flowing,newWaterMap,[])
+ | otherwise =
+  (Flowing,Map.insert p Flowing downWaterMap,[])
+ where
+  isClay = Set.member p day17a_claySet
+ 
+  down = movePoint p South
+  flowDown = day17a_flowDown waterMap down
+  downStagnant = fst' flowDown == Stagnant
+  downWaterMap = snd' flowDown
+  downLayer = trd' flowDown
+  
+  left = movePoint p West
+  flowLeft =
+   day17a_flowHorizontal downWaterMap West downLayer left
+  leftStagnant = fst' flowLeft == Stagnant
+  leftWaterMap = snd' flowLeft
+  leftLayer = trd' flowLeft
+  
+  right = movePoint p East
+  flowRight =
+   day17a_flowHorizontal leftWaterMap East downLayer right
+  rightStagnant = fst' flowRight == Stagnant 
+  rightWaterMap = snd' flowRight
+  rightLayer = trd' flowRight
+  
+  leftRightStagnant = leftStagnant && rightStagnant
+  leftRightStatus
+   | leftRightStagnant = Stagnant
+   | otherwise         = Flowing
+  
+  layer = p:leftLayer ++ rightLayer
+  newWaterMap =
+   foldl
+    (\acc x -> Map.insert x leftRightStatus acc)
+    rightWaterMap layer
+  
+  
+  checkedStatus = waterMap Map.! p
+
+day17a_flowHorizontal waterMap direction downLayer p
+ | isClay =
+  (Stagnant,waterMap,[])
+ | downStagnant =
+  (horiStatus,horiWaterMap,horiLayerNew)
+  -- (horiStatus,newWaterMap,horiLayerNew)
+ | otherwise =
+  (Flowing,downWaterMap,[p])
+  -- (Flowing,Map.insert p Flowing downWaterMap,[])
+ where
+  isClay = Set.member p day17a_claySet
+ 
+  down = movePoint p South
+  flowDown
+   | elem down downLayer =
+    (Stagnant,waterMap,[])
+   | otherwise =
+    day17a_flowDown waterMap down
+  downStagnant = fst' flowDown == Stagnant
+  downWaterMap = snd' flowDown
+  downLayerAdd = trd' flowDown
+  downLayerNew = downLayerAdd ++ downLayer
+  
+  hori = movePoint p direction
+  flowHori =
+   day17a_flowHorizontal
+    downWaterMap direction downLayerNew hori
+  horiStatus = fst' flowHori
+  horiWaterMap = snd' flowHori
+  horiLayer = trd' flowHori
+  horiLayerNew = p:horiLayer
+  
+  -- newWaterMap = Map.insert p horiStatus horiWaterMap
+
+day17a_xMin = minimum day17a_xs
+day17a_xMax = maximum day17a_xs
+
+day17a_yMin = minimum day17a_ys
+day17a_yMax = maximum day17a_ys
+
+day17a_xs = map (\(Point x y) -> x) day17a_pointsList
+day17a_ys = map (\(Point x y) -> y) day17a_pointsList
+
+day17a_claySet =
+ Set.fromList day17a_pointsList
+ 
+day17a_pointsList = concat $ map getPoints day17a_data
+ where
+  getPoints ('x',n,m1,m2) = [Point n m | m <- [m1..m2]]
+  getPoints ('y',n,m1,m2) = [Point m n | m <- [m1..m2]]
+
+day17a_data = map getData day17a_split
+ where
+  getData entry =
+   (static,n,m1,m2)
+   where
+   static = head entry
+   split = splitOnList ",." entry
+   n = readInt $ filter isNumber $ split !! 0
+   m1 = readInt $ filter isNumber $ split !! 1
+   m2 = readInt $ filter isNumber $ split !! 3
+
+day17a_split = splitOn ';' data17
+
+-- Day 16b
+
+day16b = toList day16b_output
+
+day16b_output = day16b_calc day16b_input $ listToArray [0,0,0,0]
+
+day16b_calc [] state = state
+day16b_calc ((opCode:values):rest) state =
+ day16b_calc rest newState
+ where
+  newState =
+   day16a_apply (day16b_opMap Map.! opCode) values state
+
+day16b_opMap = Map.fromList $ day16b_seive day16b_reduced
+
+day16b_seive assocs
+ | length resolved == length day16a_operations =
+  map (\(a,[b]) -> (a,b) ) assocs
+ | otherwise = day16b_seive nextAssocs
+  where
+   resolved =
+    concat $ filter (\x -> length x == 1) $ snd $ unzip assocs
+   nextAssocs = map seive assocs
+   seive (a,[b]) = (a,[b])
+   seive (a,b) = (a,b \\ resolved)
+   
+
+day16b_reduced = map reduce day16b_grouped
+ where
+  reduce list = (opCode,reduced)
+   where
+    unzipped = unzip list
+    opCode = head $ fst unzipped
+    codes = snd unzipped
+    reduced = foldl1 (\acc x -> intersect x acc) codes
+    
+day16b_input = spoolList 4 data16b
+
+day16b_grouped = groupBy (equaling fst) day16b_nubSort
+
+day16b_nubSort = nub $ sort day16a_calc
+
+-- Day 16a
+
+data Operation =
+ ADDR | ADDI | MULR | MULI |
+ BANR | BANI | BORR | BORI |
+ SETR | SETI |
+ GTIR | GTRI | GTRR |
+ EQIR | EQRI | EQRR
+ deriving (Eq, Ord, Bounded, Enum, Show)
+ 
+day16a = length day16a_output
+ 
+day16a_output = filter (\(x,y) -> length y >= 3) day16a_calc
+
+day16a_calc = map day16a_check day16a_input
+
+day16a_check example@(before,instruction,after) = (opCode,possible)
+ where
+  list = tail instruction
+  opCode = head instruction
+  appliedList =
+   map (\op -> day16a_apply op list before) day16a_operations
+  boolList = map (== after) appliedList
+  filtered =
+   filter (\(a,b) -> b) $ zip day16a_operations boolList
+  possible = fst $ unzip filtered
+  
+
+day16a_apply operation [valA,valB,valC] state =
+ case operation of
+  ADDR -> state // [(valC,regA + regB)]
+  ADDI -> state // [(valC,regA + valB)]
+  MULR -> state // [(valC,regA * regB)]
+  MULI -> state // [(valC,regA * valB)]
+  BANR -> state // [(valC,regA .&. regB)]
+  BANI -> state // [(valC,regA .&. valB)]
+  BORR -> state // [(valC,regA .|. regB)]
+  BORI -> state // [(valC,regA .|. valB)]
+  SETR -> state // [(valC,regA)]
+  SETI -> state // [(valC,valA)]
+  GTIR -> state // [(valC,boolToInt $ valA > regB)]
+  GTRI -> state // [(valC,boolToInt $ regA > valB)]
+  GTRR -> state // [(valC,boolToInt $ regA > regB)]
+  EQIR -> state // [(valC,boolToInt $ valA == regB)]
+  EQRI -> state // [(valC,boolToInt $ regA == valB)]
+  EQRR -> state // [(valC,boolToInt $ regA == regB)]
+ where
+  regA = state ! valA
+  regB = state ! valB
+  boolToInt False = 0
+  boolToInt True  = 1
+
+day16a_input = map transform entries
+ where
+  split = splitOn ';' data16a
+  entries = spoolList 4 split
+  transform [a,b,c,_] = (d,e,f)
+   where
+    d =
+     listToArray
+      (read $ filter (`elem` "[,]0123456789") a :: [Int])
+    e = map read $ splitOn ' ' b :: [Int]
+    f =
+     listToArray
+      (read $ filter (`elem` "[,]0123456789") c :: [Int])
+
+day16a_operations = enumFrom minBound :: [Operation]
 
 -- Day 15b
 
@@ -35,13 +421,15 @@ day15b_output weapon
  | otherwise =
   output ++ (day15b_output (weapon + 1))
  where
-  output = day15b_iterate weapon 1 day15a_creatures
+  output = day15b_iterate weapon 1 [] day15a_creatures
   finalElves = (\(_,_,e,_) -> e) $ last output
 
-day15b_print =
+-- delay of 200000 to 500000 microseconds is reasonable
+day15b_print delay =
  do
-  mapM putStrLn $ concat $
-   map day15b_string day15b_getOutput
+  sequence $ concat $
+   map (\x -> (threadDelay delay):(map putStrLn x)) $
+    map day15b_string day15b_getOutput
   return ()
 
 day15b_string (weapon,n,elves,creatures) =
@@ -60,17 +448,19 @@ day15b_string (weapon,n,elves,creatures) =
      (Point x y) creatureMap |
       x <- [0..day15a_xMax]] | y <- [0..day15a_yMax]]
  
-day15b_iterate ::
- Int -> Int -> [Creature] -> [(Int,Int,Int,[Creature])]
-day15b_iterate weapon n creatures
+-- day15b_iterate ::
+-- Int -> Int -> [Creature] -> [(Int,Int,Int,[Creature])]
+day15b_iterate weapon n prevPos creatures
  | ended || newElves < day15b_elves =
   [(weapon,n,newElves,nextCreatures)]
  | otherwise =
   (weapon,n,newElves,nextCreatures):
-   (day15b_iterate weapon (n + 1) nextCreatures)
+   (day15b_iterate weapon (n + 1) currPos nextCreatures)
  where
-  (ended,nextCreatures) = day15a_doStep weapon creatures
+  (ended,nextCreatures) =
+   day15a_doStep weapon prevPos creatures
   newElves = day15b_getElves nextCreatures
+  currPos = day15a_getPos creatures
    
 day15b_elves = day15b_getElves day15a_creatures
  
@@ -98,7 +488,7 @@ day15a = fullRounds * hpSum
   fullRounds = rounds - 1
   hpSum = sum $ map (\(Creature _ hp _) -> hp) creatures
   
-day15a_output = day15a_iterate 1 day15a_creatures
+day15a_output = day15a_iterate 1 [] day15a_creatures
 
 day15a_print =
  do
@@ -134,24 +524,28 @@ day15a_string (n,_,creatures) = "":(show n):(show creatureHP):strings
      (Point x y) creatureMap |
       x <- [0..day15a_xMax]] | y <- [0..day15a_yMax]]
  
-day15a_iterate n creatures
+day15a_iterate n prevPos creatures
  | ended =
   [(n,length nextCreatures,nextCreatures)]
  | otherwise =
-  (n,length nextCreatures,nextCreatures):(day15a_iterate (n + 1) nextCreatures)
+  (n,length nextCreatures,nextCreatures):(day15a_iterate (n + 1) currPos nextCreatures)
  where
-  (ended,nextCreatures) = day15a_doStep 3 creatures
+  (ended,nextCreatures) = day15a_doStep 3 prevPos creatures
+  currPos = day15a_getPos creatures
     
-day15a_doStep weapon creatures =
- day15a_step weapon False creatures creatures
+day15a_doStep weapon prevPos creatures =
+ day15a_step weapon False prevPos creatures creatures
 
-day15a_step weapon ended [] creatures = (ended,day15a_sortCreatures creatures)
-day15a_step weapon ended (current@(Creature pos hp kind):restQueue) creatures =
- day15a_step weapon newEnded nextQueue nextCreatures
+day15a_step weapon ended _ [] creatures = (ended,day15a_sortCreatures creatures)
+day15a_step weapon ended prevPos
+ (current@(Creature pos hp kind):restQueue) creatures =
+ day15a_step weapon newEnded prevPos nextQueue nextCreatures
   where
    -- common
    others = delete current creatures
-   blocked = day15a_getPos others
+   currPos = day15a_getPos creatures
+   blocked = delete pos currPos
+   combatLocked = currPos == prevPos
    
    enemies = filter (\(Creature _ _ k) -> k /= kind) others
    enemyPos = day15a_getPos enemies
@@ -163,7 +557,11 @@ day15a_step weapon ended (current@(Creature pos hp kind):restQueue) creatures =
    targets = concat $ map (day15a_options blocked) enemyPos
    
    -- move
-   posMoved = day15a_move blocked targets pos
+   posMoved
+    | combatLocked =
+     pos
+    | otherwise =
+     day15a_move blocked targets pos
    
    currentMoved = Creature posMoved hp kind
    
@@ -1211,7 +1609,7 @@ day03b_rectangleMap =
 
 data Point =
  Point Int Int
- deriving (Show, Eq, Ord, Generic)
+ deriving (Show, Eq, Ord, Ix, Generic)
 
 instance Hashable Point
 
@@ -1414,6 +1812,11 @@ movePoint (Point x y) East = (Point (x + 1) y)
 movePoint (Point x y) South = (Point x (y + 1))
 movePoint (Point x y) West = (Point (x - 1) y)
 
+movePointByList p [] = p
+movePointByList p (x:xs) =
+ movePointByList (movePoint p x) xs
+
+
 turnDirection North Clockwise = East 
 turnDirection East Clockwise = South
 turnDirection South Clockwise = West
@@ -1426,5 +1829,22 @@ turnDirection West Counterclockwise = South
 
 adjacentPoints p = map (movePoint p) [North,East,South,West]
 
+surroundingPoints p =
+ map (movePointByList p)
+  [[North,West],[North],[North,East],[West],[East],
+   [South,West],[South],[South,East]]
+
+
 readingOrder points =
  sortBy (\(Point a b) (Point c d) -> compare (b,a) (d,c)) points
+ 
+listToArray list =
+ array (0,max) $ zip [0..max] list
+ where
+  max = (length list) - 1
+  
+readInt string = read string :: Int
+
+fst' (a,b,c) = a
+snd' (a,b,c) = b
+trd' (a,b,c) = c
