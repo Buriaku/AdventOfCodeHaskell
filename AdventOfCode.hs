@@ -18,9 +18,48 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
--- Day 01b
+-- Day 02b
 
--- Day 01a
+day02b = length day02b_correct
+
+day02b_correct = filter day02b_check day02a_passwords
+ 
+day02b_check (Password int1 int2 char string) =
+ elem1 /= elem2
+ where
+  char1 = string !! (int1 - 1)
+  char2 = string !! (int2 - 1)
+  elem1 = char1 == char
+  elem2 = char2 == char
+
+-- Day 02a
+
+data Password =
+ Password Int Int Char String
+ deriving (Show, Eq)
+ 
+day02a = length day02a_correct
+ 
+day02a_correct = filter day02a_check day02a_passwords
+ 
+day02a_check (Password int1 int2 char string) =
+ filtered_length >= int1 && filtered_length <= int2
+ where
+  filtered = filter (== char) string
+  filtered_length = length filtered
+ 
+day02a_passwords = map assign day02a_split
+ where
+  assign (a:b:c:d:e) = Password int1 int2 (head c) $ head e
+   where
+    int1 = read a :: Int
+    int2 = read b :: Int
+
+day02a_split = map (splitOnList "-: ") day02a_lines
+
+day02a_lines = splitOn ';' data02
+
+-- Day 01b
 
 day01b = head day01b_calc
 
@@ -84,26 +123,26 @@ day01a_magic = 2020
 
 -- Commons
 
--- splitOn :: Eq a => a -> [a] -> [[a]]
--- splitOn element list =
- -- foldr
-  -- (\x acc@(acc_h:acc_t) ->
-   -- if x == element
-    -- then []:acc
-    -- else (x:acc_h):acc_t)
-  -- [[]] list
+splitOn :: Eq a => a -> [a] -> [[a]]
+splitOn element list =
+ foldr
+  (\x acc@(acc_h:acc_t) ->
+   if x == element
+    then []:acc
+    else (x:acc_h):acc_t)
+  [[]] list
 
--- splitOnList :: Eq a => [a] -> [a] -> [[a]]
--- splitOnList elementList list =
- -- foldr
-  -- (\x acc@(acc_h:acc_t) ->
-   -- if elem x elementList
-    -- then []:acc
-    -- else (x:acc_h):acc_t)
-  -- [[]] list
+splitOnList :: Eq a => [a] -> [a] -> [[a]]
+splitOnList elementList list =
+ foldr
+  (\x acc@(acc_h:acc_t) ->
+   if elem x elementList
+    then []:acc
+    else (x:acc_h):acc_t)
+  [[]] list
   
--- spoolList n [] = []
--- spoolList n list = (take n list):(spoolList n (drop n list))
+spoolList n [] = []
+spoolList n list = (take n list):(spoolList n (drop n list))
 
 -- equaling f a b = f a == f b
 
