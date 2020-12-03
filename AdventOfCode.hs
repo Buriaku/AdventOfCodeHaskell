@@ -18,6 +18,63 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
+-- Day 03b
+
+day03b = foldr1 (*) day03b_calc
+
+day03b_calc = map (\v -> day03a_count v day03a_start 0) day03b_vectors
+
+day03b_vectors = [(1, 1),(3, 1),(5, 1),(7, 1),(1, 2)]
+
+-- Day 03a
+
+day03a = day03a_count day03a_vector day03a_start 0
+
+day03a_count vector p@(Point x y) trees
+ | y > day03a_yMax =
+  trees
+ | check == Tree =
+  day03a_count vector next $ trees + 1
+ | check == Ground =
+  day03a_count vector next trees
+ where
+  check = day03a_woodArray ! p
+  next = day03a_move vector p
+ 
+data Point =
+ Point Int Int
+ deriving (Show, Eq, Ord, Ix)
+
+data Tobogan =
+ Tree | Ground
+ deriving (Eq, Show)
+ 
+day03a_woodArray =
+ array (Point 0 0,Point day03a_xMax day03a_yMax) day03a_list
+
+day03a_list = assocList
+ where
+  coords =
+   [Point x y | y <- [0..day03a_yMax], x <- [0..day03a_xMax]]
+  assocList = zip coords $ map charToTobogan $ concat day03a_lines
+  charToTobogan '.' = Ground
+  charToTobogan '#' = Tree
+  
+day03a_move vector (Point x y) =
+ Point
+  (mod (x + (fst vector)) day03a_xLength)
+  (y + (snd vector))
+
+day03a_vector = (3,1)
+day03a_start = Point 0 0
+
+day03a_xMax = day03a_xLength - 1
+day03a_yMax = day03a_yLength - 1
+day03a_xLength = length $ head day03a_lines
+day03a_yLength = length day03a_lines
+
+day03a_lines = splitOn ';' data03
+
 -- Day 02b
 
 day02b = length day02b_correct
@@ -50,10 +107,13 @@ day02a_check (Password int1 int2 char string) =
  
 day02a_passwords = map assign day02a_split
  where
-  assign (a:b:c:d:e) = Password int1 int2 (head c) $ head e
+  assign (a:b:c:d:e) =
+   Password int1 int2 char string
    where
-    int1 = read a :: Int
-    int2 = read b :: Int
+    int1 = readInt a
+    int2 = readInt b
+    char = head c
+    string = head e
 
 day02a_split = map (splitOnList "-: ") day02a_lines
 
@@ -144,6 +204,12 @@ splitOnList elementList list =
 spoolList n [] = []
 spoolList n list = (take n list):(spoolList n (drop n list))
 
+readInt string = read string :: Int
+
+fst' (a,b,c) = a
+snd' (a,b,c) = b
+trd' (a,b,c) = c
+
 -- equaling f a b = f a == f b
 
 -- manhattanDistance (Point x1 y1) (Point x2 y2) =
@@ -229,9 +295,3 @@ spoolList n list = (take n list):(spoolList n (drop n list))
  -- array (0,max) $ zip [0..max] list
  -- where
   -- max = (length list) - 1
-  
--- readInt string = read string :: Int
-
--- fst' (a,b,c) = a
--- snd' (a,b,c) = b
--- trd' (a,b,c) = c
