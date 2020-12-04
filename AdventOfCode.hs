@@ -18,13 +18,107 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
+-- Day 04b
+
+day04b = length day04b_calc
+
+day04b_calc = filter id day04b_checkMaps
+
+day04b_checkMaps = map day04b_check day04a_maps
+
+day04b_check entryMap = all id checked 
+ where
+  types = tail day04a_types
+  values = map (`Map.lookup` entryMap) types
+  zipped = zip types values
+  checked = map day04b_checkItem zipped
+
+day04b_checkItem (key, Nothing) = False
+
+day04b_checkItem ("byr", Just value) =
+ intValue >= 1920 && intValue <= 2002
+ where
+  intValue = readInt value
+
+day04b_checkItem ("iyr", Just value) =
+ intValue >= 2010 && intValue <= 2020
+ where
+  intValue = readInt value
+  
+day04b_checkItem ("eyr", Just value) =
+ intValue >= 2020 && intValue <= 2030
+ where
+  intValue = readInt value
+  
+day04b_checkItem ("hgt", Just value)
+ | unit == "cm" =
+  intValue >= 150 && intValue <= 193
+ | unit == "in" =
+  intValue >= 59 && intValue <= 76
+ where
+  unit = filter (`elem` ['a'..'z']) value
+  digits = filter (`elem` ['0'..'9']) value
+  intValue = readInt digits
+
+day04b_checkItem ("hcl", Just value)
+ = l2 == 6 && l1 == 7 && leading == '#'
+ where
+  leading = head value
+  elems = ['0'..'9'] ++ ['a'..'f']
+  filteredHex = filter (`elem` elems) $ tail value
+  l1 = length value
+  l2 = length filteredHex
+  
+day04b_checkItem ("ecl", Just value)
+ = elem value colors
+ where
+  colors =
+   ["amb","blu","brn","gry","grn","hzl","oth"] 
+  
+day04b_checkItem ("pid", Just value)
+ = l2 == 9 && l1 == 9
+ where
+  elems = ['0'..'9']
+  filtered = filter (`elem` elems) value
+  l1 = length value
+  l2 = length filtered
+
+day04b_checkItem (key, Just value) = False
+
+-- Day 04a
+
+day04a = length day04a_calc
+
+day04a_calc = filter id day04a_checkMaps
+
+day04a_checkMaps = map day04a_check day04a_maps
+
+day04a_check entryMap = all id checked
+ where
+  types = tail day04a_types
+  checked = map (`Map.member` entryMap) types
+
+day04a_maps = map (Map.fromList) assocLists
+ where
+  assocLists =
+   map (map $ toAssoc . splitOn ':') day04a_entries
+  toAssoc (a:b:[]) = (a,b)
+  
+day04a_entries = map (splitOn ',') day04a_lines
+
+day04a_lines = splitOn ';' data04
+
+day04a_types =
+ ["cid","byr","iyr","eyr","hgt","hcl","ecl","pid"]
+
 -- Day 03b
 
 day03b = foldr1 (*) day03b_calc
 
 day03b_calc = map (\v -> day03a_count v day03a_start 0) day03b_vectors
 
-day03b_vectors = [(1, 1),(3, 1),(5, 1),(7, 1),(1, 2)]
+day03b_vectors =
+ [(1, 1),(3, 1),(5, 1),(7, 1),(1, 2)]
 
 -- Day 03a
 
