@@ -22,6 +22,141 @@ import qualified Data.HashPSQ as HPSQ
 
 import AdventOfCodeData
 
+data Wood =
+ Ground | Trees | Lumber
+ deriving (Eq, Ord, Show)
+ 
+data Flowstate =
+ Stagnant | Flowing
+ deriving (Eq, Show)
+
+data Operation =
+ ADDR | ADDI | MULR | MULI |
+ BANR | BANI | BORR | BORI |
+ SETR | SETI |
+ GTIR | GTRI | GTRR |
+ EQIR | EQRI | EQRR
+ deriving (Eq, Ord, Bounded, Enum, Show, Read)
+ 
+data Cave =
+ Wall | Floor
+ deriving (Show, Eq)
+
+-- creature position health elf/goblin
+data Creature =
+ Creature Point Int Kind
+ deriving (Show, Eq)
+ 
+data Kind =
+ Elf | Goblin
+ deriving (Show, Eq, Ord)
+ 
+data Track =
+ Horizontal | Vertical |
+ NorthWest | SouthWest | NorthEast | SouthEast |
+ Crossing
+ deriving (Show, Eq)
+
+data Turning =
+ Counterclockwise | Straight | Clockwise
+ deriving (Show, Eq)
+
+data Direction =
+ North | East | South | West
+ deriving (Show, Eq)
+
+data Cart =
+ Cart Point Direction Turning
+ deriving (Show, Eq)
+ 
+data IntTree =
+ IntBranch [IntTree] [Int]
+ deriving (Show, Eq)
+
+data Point =
+ Point Int Int
+ deriving (Show, Eq, Ord, Ix, Generic)
+
+instance Hashable Point
+
+data Rectangle =
+ Rectangle Point Int Int
+ deriving (Show, Eq, Ord)
+ 
+-- Day 19b
+
+day19b = day19b_output ! 0
+
+day19b_output =
+ timeCPU_process day19a_instructions $
+  listToArray [1,0,0,0,0,0]
+
+-- Day 19a
+
+day19a = day19a_output ! 0
+
+day19a_output =
+ timeCPU_process day19a_instructions $
+  listToArray [0,0,0,0,0,0]
+
+timeCPU_process instructions state
+ -- | opPointer > maxPointer || opPointer < 0 =
+ -- opState
+ | newPointer > maxPointer || newPointer < 0 =
+  opState
+ | otherwise =
+  timeCPU_process instructions newState
+ where
+  pointer = state ! day19a_ip
+  maxPointer = snd $ bounds instructions
+  (op,values) = instructions ! pointer
+  
+  opState = timeCPU_apply op values state
+  opPointer = opState ! day19a_ip
+  
+  newPointer = opPointer  + 1
+  newState = opState // [(day19a_ip,newPointer)]
+
+timeCPU_apply operation [valA,valB,valC] state =
+ case operation of
+  ADDR -> state // [(valC,regA + regB)]
+  ADDI -> state // [(valC,regA + valB)]
+  MULR -> state // [(valC,regA * regB)]
+  MULI -> state // [(valC,regA * valB)]
+  BANR -> state // [(valC,regA .&. regB)]
+  BANI -> state // [(valC,regA .&. valB)]
+  BORR -> state // [(valC,regA .|. regB)]
+  BORI -> state // [(valC,regA .|. valB)]
+  SETR -> state // [(valC,regA)]
+  SETI -> state // [(valC,valA)]
+  GTIR -> state // [(valC,boolToInt $ valA > regB)]
+  GTRI -> state // [(valC,boolToInt $ regA > valB)]
+  GTRR -> state // [(valC,boolToInt $ regA > regB)]
+  EQIR -> state // [(valC,boolToInt $ valA == regB)]
+  EQRI -> state // [(valC,boolToInt $ regA == valB)]
+  EQRR -> state // [(valC,boolToInt $ regA == regB)]
+ where
+  regA = state ! valA
+  regB = state ! valB
+  boolToInt False = 0
+  boolToInt True  = 1
+
+day19a_instructions = listToArray day19a_instructionList
+
+day19a_instructionList =
+ map getInstruction $ tail day19a_split
+ where
+  getInstruction string =
+   (op,values)
+   where
+    split = splitOn ' ' string
+    op = read $ map toUpper $ head split :: Operation
+    values = map read $ tail split :: [Int]
+
+day19a_ip = read $ filter isNumber $ head day19a_split :: Int
+
+day19a_split = splitOn ';' data19
+
 -- Day 18b
 
 day18b = treeCount * lumberCount
@@ -58,11 +193,6 @@ day18b_getPeriod n woodArray prevArrayMap
 day18b_time = 1000000000 :: Int
 
 -- Day 18a
-
-data Wood =
- Ground | Trees | Lumber
- deriving (Eq, Ord, Show)
-
  
 day18a = treeCount * lumberCount
  where
@@ -140,10 +270,6 @@ day17b =
   Map.elems day17a_waterMap
 
 -- Day 17a
-
-data Flowstate =
- Stagnant | Flowing
- deriving (Eq, Show)
 
 day17a = (Map.size day17a_waterMap) - 1
 
@@ -338,14 +464,6 @@ day16b_grouped = groupBy (equaling fst) day16b_nubSort
 day16b_nubSort = nub $ sort day16a_calc
 
 -- Day 16a
-
-data Operation =
- ADDR | ADDI | MULR | MULI |
- BANR | BANI | BORR | BORI |
- SETR | SETI |
- GTIR | GTRI | GTRR |
- EQIR | EQRI | EQRR
- deriving (Eq, Ord, Bounded, Enum, Show)
  
 day16a = length day16a_output
  
@@ -468,19 +586,6 @@ day15b_getElves creatures =
  length $ filter (\(Creature _ _ k) -> k == Elf) creatures
 
 -- Day 15a
-
-data Cave =
- Wall | Floor
- deriving (Show, Eq)
-
--- creature position health elf/goblin
-data Creature =
- Creature Point Int Kind
- deriving (Show, Eq)
- 
-data Kind =
- Elf | Goblin
- deriving (Show, Eq, Ord)
  
 day15a = fullRounds * hpSum
  where
@@ -845,24 +950,6 @@ day13b_check cart@(Cart p1 _ _) (current@(Cart p2 _ _):next)
   day13b_check cart next
 
 -- Day 13a
-
-data Track =
- Horizontal | Vertical |
- NorthWest | SouthWest | NorthEast | SouthEast |
- Crossing
- deriving (Show, Eq)
-
-data Turning =
- Counterclockwise | Straight | Clockwise
- deriving (Show, Eq)
-
-data Direction =
- North | East | South | West
- deriving (Show, Eq)
-
-data Cart =
- Cart Point Direction Turning
- deriving (Show, Eq)
 
 day13a = point
  where
@@ -1295,9 +1382,6 @@ day08b_calcValue (IntBranch children metadata)
     element = findInList (reference - 1) children
 
 -- Day 08a
-data IntTree =
- IntBranch [IntTree] [Int]
- deriving (Show, Eq)
  
 day08a = day08a_sumMetadata day08a_tree
  
@@ -1606,16 +1690,6 @@ day03b_rectangleMap =
  Map.fromList day03a_rectangleAssoc
 
 -- Day 03a
-
-data Point =
- Point Int Int
- deriving (Show, Eq, Ord, Ix, Generic)
-
-instance Hashable Point
-
-data Rectangle =
- Rectangle Point Int Int
- deriving (Show, Eq, Ord)
 
 day03a = length $ day03a_output
 
