@@ -18,6 +18,59 @@ import qualified Data.Sequence as Seq
 
 import AdventOfCodeData
 
+data Point =
+ Point Int Int
+ deriving (Show, Eq, Ord, Ix)
+
+data Tobogan =
+ Tree | Ground
+ deriving (Eq, Show)
+ 
+data Password =
+ Password Int Int Char String
+ deriving (Show, Eq)
+ 
+-- Day 05b
+
+day05b = day05b_calc 0 day05a_calc
+
+day05b_calc :: Int -> [[Int]] -> Int
+day05b_calc _ [] = 0
+day05b_calc 0 ((current:b:c:[]):rest) =
+ day05b_calc current rest
+day05b_calc last ((current:b:c:[]):rest)
+ | last + 1 == current =
+  day05b_calc current rest
+ | otherwise = last + 1
+ 
+-- Day 05a
+
+day05a = head $ last day05a_calc
+
+day05a_calc :: [[Int]]
+day05a_calc =
+ sort $ map day05a_process day05a_passes
+
+day05a_process (frontback,leftright) =
+ [row * 8 + col,row,col]
+ where
+  row = day05a_binComp 128 frontback
+  col = day05a_binComp 8 leftright
+
+day05a_binComp n [] = 0
+
+day05a_binComp n (pop:rest)
+ | elem pop "FL" =
+  0 + (day05a_binComp half rest)
+ | otherwise =
+  half + (day05a_binComp half rest)
+ where
+  half = div n 2
+
+day05a_passes = map (splitAt 7) day05a_lines
+
+day05a_lines = splitOn ';' data05
+
 -- Day 04b
 
 day04b = length day04b_calc
@@ -135,14 +188,6 @@ day03a_count vector p@(Point x y) trees
   check = day03a_woodArray ! p
   next = day03a_move vector p
  
-data Point =
- Point Int Int
- deriving (Show, Eq, Ord, Ix)
-
-data Tobogan =
- Tree | Ground
- deriving (Eq, Show)
- 
 day03a_woodArray =
  array (Point 0 0,Point day03a_xMax day03a_yMax) day03a_list
 
@@ -184,10 +229,6 @@ day02b_check (Password int1 int2 char string) =
   elem2 = char2 == char
 
 -- Day 02a
-
-data Password =
- Password Int Int Char String
- deriving (Show, Eq)
  
 day02a = length day02a_correct
  
