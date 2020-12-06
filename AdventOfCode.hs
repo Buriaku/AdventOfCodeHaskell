@@ -30,6 +30,44 @@ data Password =
  Password Int Int Char String
  deriving (Show, Eq)
  
+-- Day 06b
+
+day06b =
+ foldl (\acc x -> acc + (length (head x))) 0 day06b_calc
+
+day06b_calc =
+ day06b_filterChar chars day06b_groups
+ where
+  chars = ['a'..'z']
+
+day06b_filterChar [] groups = groups
+day06b_filterChar (char:rest) groups
+ = day06b_filterChar rest filteredGroups
+ where
+  filteredGroups =
+   map (day06b_filter char) groups
+
+day06b_filter char group
+ | all (elem char) group =
+  group
+ | otherwise =
+  map (filter (/= char)) group
+
+day06b_groups = map (splitOn ',') day06a_lines
+ 
+-- Day 06a
+
+day06a =
+ foldl (\acc x -> acc + (length x)) 0 day06a_nubbed
+
+day06a_nubbed = nubbed
+ where
+  filtered = map (filter (/= ',')) day06a_lines
+  sorted = map sort filtered
+  nubbed = map nub sorted
+
+day06a_lines = splitOn ';' data06
+ 
 -- Day 05b
 
 day05b = day05b_calc 0 day05a_calc
