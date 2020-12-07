@@ -29,6 +29,74 @@ data Tobogan =
 data Password =
  Password Int Int Char String
  deriving (Show, Eq)
+
+data Bag =
+ Bag String [(Int,String)]
+ deriving (Show, Eq)
+ 
+-- Day 07b
+
+day07b =
+ (day07b_countBags $ day07a_getBag "shiny gold") - 1
+
+day07b_countBags (Bag color [(0,"")]) = 1
+day07b_countBags (Bag color list) =
+ (sum bagAmounts) + 1
+ where
+  (amounts,colors) = unzip list
+  bags = map day07a_getBag colors
+  bagAmounts =
+   map (\(n,x) -> n * (day07b_countBags x)) $
+    zip amounts bags
+
+-- Day 07a
+
+day07a = length day07a_calc
+
+day07a_calc =
+ filter (day07a_checkBags "shiny gold") bagList
+ where
+  bagList = Map.elems day07a_bags
+
+day07a_checkBags check (Bag _ [(0,"")]) = False
+day07a_checkBags check (Bag _ list)
+ | any (== check) containedColors =
+  True
+ | otherwise =
+  any (day07a_checkBags check) containedBags
+ 
+ where
+  containedColors = map snd list
+  containedBags =
+   map day07a_getBag containedColors
+
+day07a_getBag color = 
+ Map.findWithDefault
+  (Bag color [(0,"")]) color day07a_bags
+
+
+day07a_bags = Map.fromList $ zip bagColors bags
+ where
+  containSplit =
+   map (splitOnString " contain ") day07a_lines
+  bagColors =
+   map (head . splitOnString " bags" . head) containSplit
+  contains =
+   map (splitOnString ", " . last) containSplit
+  containsFiltered =
+   map (map (head . splitOnString " bag")) contains
+  containsNumberColor =
+   map (map $ span isDigit) containsFiltered
+  containsRead =
+   map (map readContains) containsNumberColor
+  readContains ("",b) = (0,"")
+  readContains (a,b) = (readInt a, tail b)
+  bags =
+   map makeBag $ zip bagColors containsRead
+  
+  makeBag (color,(list)) = Bag color list
+
+day07a_lines = splitOn ';' data07
  
 -- Day 06b
 
@@ -364,6 +432,27 @@ splitOn element list =
     then []:acc
     else (x:acc_h):acc_t)
   [[]] list
+
+splitOnString :: Eq a => [a] -> [a] -> [[a]]
+splitOnString string list =
+ reverse $ map reverse $ foldIt string list [[]]
+ where
+  foldIt _ [] reverseOutput =
+   reverseOutput
+  foldIt string list@(currList:restList)
+   reverseOutput@(currOut:restOut)
+   | l2 < l1 =
+    ((reverse list) ++ currOut):restOut
+   | string == compare =
+    foldIt string dropped ([]:reverseOutput)
+   | otherwise =
+    foldIt string restList
+     ((currList:currOut):restOut)
+   where
+    l1 = length string
+    l2 = length list
+    compare = take l1 list
+    dropped = drop l1 list
 
 splitOnList :: Eq a => [a] -> [a] -> [[a]]
 splitOnList elementList list =
