@@ -33,6 +33,93 @@ data Password =
 data Bag =
  Bag String [(Int,String)]
  deriving (Show, Eq)
+
+data Operation =
+ ACC | JMP | NOP
+ deriving (Eq, Ord, Bounded, Enum, Show, Read)
+ 
+-- Day 08b
+
+day08b = fromJust $ head day08b_calc
+
+day08b_calc = filter (/= Nothing) output
+ where
+  output =
+   map (\x -> day08b_vgCPU x [] 0 0)
+    day08b_instructionsList
+
+day08b_vgCPU instructions pointerList pointer acc
+ | pointer > day08a_max = Just acc
+ | elem pointer pointerList = Nothing
+ | otherwise =
+  day08b_vgCPU instructions (pointer:pointerList)
+   newPointer newAcc
+ where
+  (op,value) = instructions ! pointer
+  (newPointer,newAcc) =
+   vgCPU_apply op pointer value acc
+   
+day08b_instructionsList =
+ day08b_jmpToNop ++ day08b_nopToJmp
+
+day08b_jmpToNop =
+ map replace day08b_jmps
+ where
+  replace (pointer,(op,value)) =
+   day08a_instructions // [(pointer,(NOP,value))]
+
+day08b_nopToJmp =
+ map replace day08b_nops
+ where
+  replace (pointer,(op,value)) =
+   day08a_instructions // [(pointer,(JMP,value))]
+
+day08b_jmps =
+ filter (\x -> JMP == (fst $ snd x)) $
+  zip [0..day08a_max]  day08a_instructionList
+   
+day08b_nops =
+ filter (\x -> NOP == (fst $ snd x)) $
+  zip [0..day08a_max] day08a_instructionList
+
+-- Day 08a
+
+day08a = day08a_vgCPU [] 0 0
+
+day08a_vgCPU pointerList pointer acc
+ | elem pointer pointerList = acc
+ | otherwise =
+  day08a_vgCPU (pointer:pointerList)
+   newPointer newAcc
+ where
+  (op,value) = day08a_instructions ! pointer
+  (newPointer,newAcc) =
+   vgCPU_apply op pointer value acc
+  
+vgCPU_apply operation pointer value acc =
+ case operation of
+  ACC -> (pointer + 1,acc + value)
+  JMP -> (pointer + value, acc)
+  NOP -> (pointer + 1,acc)
+  
+day08a_max = snd $ bounds day08a_instructions
+
+day08a_instructions =
+ listToArray day08a_instructionList
+
+day08a_instructionList =
+ map getInstruction $ day08a_lines
+ where
+  getInstruction string =
+   (op,value)
+   where
+    split = splitOn ' ' string
+    op =
+     read $ map toUpper $ head split :: Operation
+    value =
+     readInt $ filter (/= '+') $ last split
+
+day08a_lines = splitOn ';' data08
  
 -- Day 07b
 
@@ -472,6 +559,11 @@ fst' (a,b,c) = a
 snd' (a,b,c) = b
 trd' (a,b,c) = c
 
+listToArray list =
+ array (0,max) $ zip [0..max] list
+ where
+  max = (length list) - 1
+
 -- equaling f a b = f a == f b
 
 -- manhattanDistance (Point x1 y1) (Point x2 y2) =
@@ -552,8 +644,3 @@ trd' (a,b,c) = c
 
 -- readingOrder points =
  -- sortBy (\(Point a b) (Point c d) -> compare (b,a) (d,c)) points
- 
--- listToArray list =
- -- array (0,max) $ zip [0..max] list
- -- where
-  -- max = (length list) - 1
