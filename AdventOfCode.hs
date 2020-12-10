@@ -38,6 +38,114 @@ data Operation =
  ACC | JMP | NOP
  deriving (Eq, Ord, Bounded, Enum, Show, Read)
  
+-- Day 10b
+
+day10b = day10b_calc day10b_chainChoicesChecked
+
+day10b_calc [] = 1
+day10b_calc (a:rest) =
+ (length a) * (day10b_calc rest)
+
+day10b_chainChoicesChecked =
+ chainChoicesChecked
+ where
+  chainChoicesChecked =
+   map (filter checkDeleteList) chainChoices
+  chainChoices = map choicesFromList day10b_chains
+  checkDeleteList [] = True
+  checkDeleteList list =
+   day10b_check (day10a_sorted \\ list)
+
+choicesFromList list =
+ getChoices list [[]]
+ where
+  getChoices [] output = output
+  getChoices (a:rest) output =
+   getChoices rest $ output ++ (map (a:) output)
+
+day10b_chains =
+ groupBy' (\a  b -> b - a < 3) day10b_removable
+
+day10b_removable =
+ filter checkRemoved $ tail $ init day10a_sorted
+ where
+  checkRemoved x =
+   day10b_check $ delete x day10a_sorted
+   
+day10b_check [a] = True
+day10b_check (a:b:rest)
+ | diff > 0 && diff < 4 =
+  day10b_check (b:rest)
+ | otherwise =
+  False
+ where
+  diff = b - a
+
+ 
+-- Day 10a
+
+day10a = a * b
+ where
+  (a,b) = day10a_calc
+
+day10a_calc = day10a_count day10a_sorted (0,0)
+
+day10a_count [a] (jolt1,jolt3) = (jolt1,jolt3)
+day10a_count (a:b:rest) (jolt1,jolt3)
+ | diff == 1 =
+  day10a_count (b:rest) (jolt1 + 1,jolt3) 
+ | diff == 3 =
+  day10a_count (b:rest) (jolt1,jolt3 + 1) 
+ | otherwise =
+  day10a_count (b:rest) (jolt1,jolt3)
+ where
+  diff = b - a
+
+
+day10a_sorted = sort $ 0:day10a_max:data10
+
+day10a_max = (+) 3 $ maximum data10
+ 
+-- Day 09b
+
+day09b =
+ (minimum $ day09b_calc data09) +
+  (maximum $ day09b_calc data09)
+
+day09b_calc (curr:rest)
+ | checked == [] =
+  day09b_calc rest
+ | otherwise =
+  checked
+ where
+  checked = day09b_check [curr] curr rest
+ 
+
+day09b_check list prevSum (curr:rest)
+ | newSum > day09a =
+  []
+ | newSum == day09a =
+  newList
+ | otherwise =
+  day09b_check newList newSum rest
+ where
+  newSum = prevSum + curr
+  newList = curr:list
+
+-- Day 09a
+
+day09a =
+ day09a_check (reverse $ take 25 data09) $ drop 25 data09
+
+day09a_check last25 (curr:rest)
+ | elem curr sums =
+  day09a_check (curr:(init last25)) rest
+ | otherwise =
+  curr
+ where
+  sums = [x + y | x <- last25, y <- last25, x /= y]
+
+ 
 -- Day 08b
 
 day08b = fromJust $ head day08b_calc
@@ -563,6 +671,13 @@ listToArray list =
  array (0,max) $ zip [0..max] list
  where
   max = (length list) - 1
+  
+groupBy' :: (a -> a -> Bool) -> [a] -> [[a]]
+groupBy' _   []                        = []
+groupBy' _   [x]                       = [[x]]
+groupBy' cmp (x:xs@(x':_)) | cmp x x'  = (x:y):ys
+                           | otherwise = [x]:r
+  where r@(y:ys) = groupBy' cmp xs
 
 -- equaling f a b = f a == f b
 
