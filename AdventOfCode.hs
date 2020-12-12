@@ -38,7 +38,221 @@ data Operation =
  ACC | JMP | NOP
  deriving (Eq, Ord, Bounded, Enum, Show, Read)
  
+data Direction =
+ North | East | South | West
+ deriving (Show, Eq)
+
+data Turning =
+ Counterclockwise | Straight | Clockwise
+ deriving (Show, Eq)
+
+data Area =
+ Floor | Empty | Occupied
+ deriving (Eq, Show)
+ 
+-- Day 12b
+
+day12b = manhattanDistance day12a_start day12b_calc
+
+day12b_calc =
+ day12b_follow day12a_start day12b_waypoint
+  day12a_instructions
+
+day12b_follow p wp [] = p
+day12b_follow p wp (('L',n):rest) =
+ day12b_follow p
+  (iterate (turnVector Counterclockwise)
+   wp !! (div n 90)) rest
+day12b_follow p wp (('R',n):rest) =
+ day12b_follow p
+  (iterate (turnVector Clockwise)
+   wp !! (div n 90)) rest
+day12b_follow p wp (('F',n):rest) =
+ day12b_follow
+  (iterate (addPoints wp) p !! n)
+  wp rest
+day12b_follow p wp ((char,n):rest) =
+ day12b_follow p
+  (movePointByList
+    wp $ replicate n $ charToDirection char) rest
+ where
+  charToDirection 'N' = North
+  charToDirection 'E' = East
+  charToDirection 'S' = South
+  charToDirection 'W' = West
+
+day12b_waypoint = Point 10 (-1)
+ 
+-- Day 12a
+
+day12a = manhattanDistance day12a_start day12a_calc
+
+day12a_calc =
+ day12a_follow day12a_start East day12a_instructions
+
+day12a_follow :: Point -> Direction -> [(Char,Int)] -> Point
+day12a_follow p heading [] = p
+day12a_follow p heading (('L',n):rest) =
+ day12a_follow p
+  (iterate (`turnDirection` Counterclockwise)
+   heading !! (div n 90)) rest
+day12a_follow p heading (('R',n):rest) =
+ day12a_follow p
+  (iterate (`turnDirection` Clockwise)
+   heading !! (div n 90)) rest
+day12a_follow p heading (('F',n):rest) =
+ day12a_follow
+  (iterate (`movePoint` heading) p !! n)
+  heading rest
+day12a_follow p heading ((char,n):rest) =
+ day12a_follow
+  (movePointByList
+    p $ replicate n $ charToDirection char)
+  heading rest
+ where
+  charToDirection 'N' = North
+  charToDirection 'E' = East
+  charToDirection 'S' = South
+  charToDirection 'W' = West
+
+day12a_start = Point 0 0
+
+day12a_instructions =
+ map getInstructions day12a_lines
+ where
+  getInstructions (char:rest) =
+   (char,readInt rest)
+
+day12a_lines = splitOn ';' data12
+
+-- Day 11b
+
+day11b =
+ length $ filter (== Occupied) $ toList day11b_calc
+
+day11b_calc = day11b_iterate day11a_areaArray
+
+day11b_iterate area
+ | changed == [] = area
+ | otherwise     = day11b_iterate newArea
+ where
+  changed = changes day11a_points
+  newArea = area // changed
+  
+  changes [] = []
+  changes (p:rest)
+   | currState == Empty && occuCount == 0 =
+    (p,Occupied):(changes rest)
+   | currState == Occupied && occuCount >= 5 =
+    (p,Empty):(changes rest)
+   | otherwise =
+    changes rest
+   where
+    currState = area ! p
+    surr = day11b_getSurrounding p
+    surrStates = map (area !) surr
+    occuCount = day11a_countOccu surrStates
+
+day11b_getSurrounding p = surrounding
+ where
+  surrounding =
+   filter (/= (Point (-1) (-1))) $
+    map (checkDirection p) surroundingDirections
+  checkDirection p directions
+   | x < 0 || y < 0 || x > day11a_xMax ||
+     y > day11a_yMax =
+    (Point (-1) (-1))
+   | areaType /= Floor =
+    newP
+   | otherwise =
+    checkDirection newP directions
+   where
+    newP = movePointByList p directions
+    areaType = day11a_areaArray ! newP
+    (Point x y) = newP
+ 
+-- Day 11a
+
+day11a =
+ length $ filter (== Occupied) $ toList day11a_calc
+
+day11a_calc = day11a_iterate day11a_areaArray
+
+day11a_iterate area
+ | changed == [] = area
+ | otherwise     = day11a_iterate newArea
+ where
+  changed = changes day11a_points
+  newArea = area // changed
+  
+  changes [] = []
+  changes (p:rest)
+   | currState == Empty && occuCount == 0 =
+    (p,Occupied):(changes rest)
+   | currState == Occupied && occuCount >= 4 =
+    (p,Empty):(changes rest)
+   | otherwise =
+    changes rest
+   where
+    currState = area ! p
+    surr = day11a_getSurrounding p
+    surrStates = map (area !) surr
+    occuCount = day11a_countOccu surrStates
+  
+day11a_countOccu list =
+ foldl foldIt 0 list
+ where
+  foldIt acc Occupied = acc + 1
+  foldIt acc _ = acc
+
+day11a_getSurrounding p = legal
+ where
+  surrounding = surroundingPoints p
+  legal = filter filterFunction surrounding
+  filterFunction (Point x y) =
+   x >= 0 && y >= 0 &&
+    x <= day11a_xMax && y <=day11a_yMax
+  
+
+day11a_areaArray =
+ array
+  (Point 0 0,Point day11a_xMax day11a_yMax)
+  day11a_list
+ 
+day11a_list = assocList
+ where
+  coords = day11a_points
+  assocList =
+   zip coords $ map charToArea $ concat day11a_lines
+  charToArea '.' = Floor
+  charToArea 'L' = Empty
+  charToArae '#' = Occupied
+
+day11a_points =
+ [Point x y |
+  y <- [0..day11a_yMax], x <- [0..day11a_xMax]]
+
+day11a_xMax = day11a_xLength - 1
+day11a_yMax = day11a_yLength - 1
+day11a_xLength = length $ head day11a_lines
+day11a_yLength = length day11a_lines
+
+day11a_lines = splitOn ';' data11
+ 
 -- Day 10b
+
+-- solvePart2 :: [Int] -> Int
+-- solvePart2 ls =
+ -- go (1 : repeat 0) (sort ls) 0
+  -- where
+   -- go [] [] _ = 0
+   -- go as [] _ = head as
+   -- go as (l : ls) i =
+    -- go as' ls l
+     -- where
+      -- diff = (l - i -1)
+      -- s = sum $ take (3 - diff) as
+      -- as' = foldr (:) as (s : replicate diff 0)
 
 day10b = day10b_calc day10b_chainChoicesChecked
 
@@ -55,13 +269,6 @@ day10b_chainChoicesChecked =
   checkDeleteList [] = True
   checkDeleteList list =
    day10b_check (day10a_sorted \\ list)
-
-choicesFromList list =
- getChoices list [[]]
- where
-  getChoices [] output = output
-  getChoices (a:rest) output =
-   getChoices rest $ output ++ (map (a:) output)
 
 day10b_chains =
  groupBy' (\a  b -> b - a < 3) day10b_removable
@@ -659,7 +866,9 @@ splitOnList elementList list =
   [[]] list
   
 spoolList n [] = []
-spoolList n list = (take n list):(spoolList n (drop n list))
+spoolList n list = taken:(spoolList n dropped)
+ where
+  (taken,dropped) = splitAt n list
 
 readInt string = read string :: Int
 
@@ -678,11 +887,54 @@ groupBy' _   [x]                       = [[x]]
 groupBy' cmp (x:xs@(x':_)) | cmp x x'  = (x:y):ys
                            | otherwise = [x]:r
   where r@(y:ys) = groupBy' cmp xs
+  
+choicesFromList list =
+ getChoices list [[]]
+ where
+  getChoices [] output = output
+  getChoices (a:rest) output =
+   getChoices rest $ output ++ (map (a:) output)
 
--- equaling f a b = f a == f b
+turnDirection North Clockwise = East 
+turnDirection East Clockwise = South
+turnDirection South Clockwise = West
+turnDirection West Clockwise = North
 
--- manhattanDistance (Point x1 y1) (Point x2 y2) =
- -- abs (x1 - x2) + abs (y1 - y2)
+turnDirection North Counterclockwise = West
+turnDirection East Counterclockwise = North
+turnDirection South Counterclockwise = East
+turnDirection West Counterclockwise = South
+
+turnVector Counterclockwise (Point x y) =
+ (Point y (-x))
+turnVector Clockwise (Point x y) =
+ (Point (-y) x)
+
+movePoint (Point x y) North = (Point x (y - 1))
+movePoint (Point x y) East = (Point (x + 1) y)
+movePoint (Point x y) South = (Point x (y + 1))
+movePoint (Point x y) West = (Point (x - 1) y)
+
+movePointByList p [] = p
+movePointByList p (x:xs) =
+ movePointByList (movePoint p x) xs
+
+adjacentPoints p =
+ map (movePoint p) [North,East,South,West]
+
+surroundingPoints p =
+ map (movePointByList p) surroundingDirections
+
+surroundingDirections =
+ [[North,West],[North],[North,East],[West],[East],
+   [South,West],[South],[South,East]]
+
+equaling f a b = f a == f b
+
+manhattanDistance (Point x1 y1) (Point x2 y2) =
+ abs (x1 - x2) + abs (y1 - y2)
+
+addPoints (Point x1 y1) (Point x2 y2) = Point (x1 + x2) (y1 + y2)
  
 -- swap (a,b) = (b,a)
 
@@ -691,8 +943,6 @@ groupBy' cmp (x:xs@(x':_)) | cmp x x'  = (x:y):ys
   -- Nothing
  -- | otherwise =
   -- Just $ list !! index
-  
--- addPoints (Point x1 y1) (Point x2 y2) = Point (x1 + x2) (y1 + y2)
 
 -- pointListMinMax list =
  -- foldl getMinMax
@@ -729,32 +979,6 @@ groupBy' cmp (x:xs@(x':_)) | cmp x x'  = (x:y):ys
  -- | otherwise =
   -- take n list
   
--- movePoint (Point x y) North = (Point x (y - 1))
--- movePoint (Point x y) East = (Point (x + 1) y)
--- movePoint (Point x y) South = (Point x (y + 1))
--- movePoint (Point x y) West = (Point (x - 1) y)
-
--- movePointByList p [] = p
--- movePointByList p (x:xs) =
- -- movePointByList (movePoint p x) xs
-
-
--- turnDirection North Clockwise = East 
--- turnDirection East Clockwise = South
--- turnDirection South Clockwise = West
--- turnDirection West Clockwise = North
-
--- turnDirection North Counterclockwise = West
--- turnDirection East Counterclockwise = North
--- turnDirection South Counterclockwise = East
--- turnDirection West Counterclockwise = South
-
--- adjacentPoints p = map (movePoint p) [North,East,South,West]
-
--- surroundingPoints p =
- -- map (movePointByList p)
-  -- [[North,West],[North],[North,East],[West],[East],
-   -- [South,West],[South],[South,East]]
 
 
 -- readingOrder points =
