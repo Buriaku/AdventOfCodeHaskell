@@ -19,8 +19,14 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.HashPSQ as HPSQ
+import qualified Data.IntMap as IntMap
+
 
 import AdventOfCodeData
+
+data Base =
+ Room Int | Door
+ deriving (Show, Eq)
 
 data Wood =
  Ground | Trees | Lumber
@@ -83,38 +89,268 @@ data Rectangle =
  Rectangle Point Int Int
  deriving (Show, Eq, Ord)
  
+-- Day 22a
+
+day22a =
+ foldl day22a_foldl 0 $ Map.elems day22a_eroMap
+
+day22a_foldl acc x =
+ acc + (mod x 3)
+ 
+
+day22a_eroMap =
+ day22a_makeMap Map.empty day22a_points
+
+day22a_makeMap eroMap [] = eroMap
+day22a_makeMap eroMap (curr:rest) =
+ day22a_makeMap newEroMap rest
+ where
+  newEroMap = day22a_erosion eroMap curr
+
+day22a_erosion eroMap p@(Point 0 0) =
+ Map.insert p (day22a_geoToEro 0) eroMap
+day22a_erosion eroMap p@(Point x 0) =
+ Map.insert p (day22a_geoToEro $ x * 16807) eroMap
+day22a_erosion eroMap p@(Point 0 y) =
+ Map.insert p (day22a_geoToEro $ y * 48271) eroMap
+day22a_erosion eroMap p@(Point x y)
+ | p == day22a_target =
+  Map.insert p (day22a_geoToEro 0) eroMap
+ | Map.member p eroMap = eroMap
+ | otherwise =
+  Map.insert p erosion yMinusMap 
+ where
+  erosion = day22a_geoToEro $ xMinus * yMinus
+  xMinusMap =
+   day22a_erosion eroMap (Point (x - 1) y)
+  xMinus = xMinusMap Map.! (Point (x - 1) y)
+  yMinusMap =
+   day22a_erosion xMinusMap (Point x (y - 1))
+  yMinus = yMinusMap Map.! (Point x (y - 1))
+
+day22a_geoToEro geoInd =
+ mod (geoInd + day22a_depth) 20183
+ 
+day22a_points =
+ [Point x y | x <- [0..xMax], y <- [0..yMax]]
+ where
+  (Point xMax yMax) = day22a_target
+
+day22a_depth = 3339
+day22a_target = Point 10 715
+day22a_mouth = Point 0 0
+
+-- Day 21b
+
+day21b = day21b_calc Set.empty 0 day21a_calc
+
+day21b_calc intSet prev (curr:rest)
+ | Set.member curr intSet =
+  prev
+ | otherwise =
+  day21b_calc (Set.insert curr intSet) curr rest
+  
+-- Day 21a
+
+day21a = head day21a_calc
+
+day21a_calc =
+ map (\[_,_,_,x,_,_] -> x) $
+  day21a_test [0,0,0,0,0,0]
+
+-- x = 3
+-- pass 1 drop 1800
+-- [3,256,65536,3809384,0,25]
+-- pass 3
+-- [3,827,212115,13496537,0,25]
+
+day21a_test list =
+ map toList $
+  day21a_timeCPU2 $
+   listToArray list
+
+day21a_timeCPU2 state
+ | newPointer == 28 =
+  newState:(day21a_timeCPU2 newState)
+ | newPointer > day21a_maxPointer
+    || newPointer < 0 = [newState]
+ | otherwise =
+  --newState:
+  (day21a_timeCPU2 newState)
+ where
+  pointer = state ! day21a_ip
+  
+  magic1 = (div (state ! 2) 256) - 1
+  
+  modState = 
+   if pointer == 25 && (state ! 1) < magic1
+    then
+     state // [(1,magic1)]
+    else
+     state
+  
+  (op,values) = day21a_instructions ! pointer
+  opState = timeCPU_apply op values modState
+  
+  newPointer = (opState ! day21a_ip) + 1
+  newState = opState // [(day21a_ip,newPointer)]
+  
+day21a_maxPointer = snd $ bounds day21a_instructions
+
+day21a_instructions =
+ listToArray day21a_instructionList
+
+day21a_instructionList =
+ map getInstruction $ tail day21a_split
+ where
+  getInstruction string =
+   (op,values)
+   where
+    split = splitOn ' ' string
+    op =
+     read $ map toUpper $ head split :: Operation
+    values = map read $ tail split :: [Int]
+
+day21a_ip =
+ read $ filter isNumber $ head day21a_split :: Int
+
+day21a_split = splitOn ';' data21
+ 
+-- Day 20b
+
+day20b = length day20b_calc
+
+day20b_calc = filter (\(Room a) -> a >= 1000) rooms
+ where
+  rooms = filter filterRooms $ Map.elems day20a_map
+  filterRooms (Room _) = True
+  filterRooms _ = False
+ 
+-- Day 20a
+
+day20a = (\(Room a) -> a) day20a_calc
+
+day20a_calc =
+ maximumBy (\(Room a) (Room b) -> compare a b) rooms
+ where
+  rooms = filter filterRooms $ Map.elems day20a_map
+  filterRooms (Room _) = True
+  filterRooms _ = False
+
+day20a_map =
+ day20a_spool (Map.singleton day20a_start (Room 0))  0 day20a_start $ init $ tail data20
+
+day20a_spool baseMap _ _ [] = baseMap
+day20a_spool baseMap doors p string@(curr:rest)
+ | elem curr "NESW" =
+  day20a_spool nextBaseMap nextDoors nextRoom rest
+ | otherwise =
+  day20a_fork baseMap doors p string
+ where
+  direction = charToDirection curr
+  nextDoors = doors + 1
+  nextDoor = movePoint p direction
+  nextRoom = movePoint nextDoor direction
+  nextBaseMap =
+   Map.insertWith day20a_insert nextRoom (Room nextDoors) $
+    Map.insert nextDoor Door baseMap
+   
+  charToDirection 'N' = North
+  charToDirection 'E' = East
+  charToDirection 'S' = South
+  charToDirection 'W' = West
+
+day20a_insert Door Door = Door
+day20a_insert (Room a) (Room b) = Room $ min a b
+
+day20a_fork baseMap doors p string =
+ day20a_spool newBaseMap doors p rest
+ where
+  parsed = day20a_parseFork 0 "" [] string
+  rest = head parsed
+  forkList = tail parsed
+  baseMaps = map (day20a_spool Map.empty doors p) forkList
+  newBaseMap = Map.unionsWith day20a_insert $ baseMap:baseMaps
+
+day20a_parseFork level reverseFork reverseList (curr:rest)
+ | curr == '(' && level == 0 =
+  day20a_parseFork (level + 1) reverseFork reverseList rest
+ | curr == '(' =
+  day20a_parseFork (level + 1) (curr:reverseFork) reverseList rest
+ | curr == '|' && level == 1 =
+  day20a_parseFork level "" ((reverse reverseFork):reverseList) rest
+ | curr == ')' && level == 1 =
+  rest:(reverse $ (reverse reverseFork):reverseList)
+ | curr == ')' =
+  day20a_parseFork (level - 1) (curr:reverseFork) reverseList rest
+ | otherwise =
+  day20a_parseFork level (curr:reverseFork) reverseList rest
+  
+
+day20a_start = Point 0 0
+ 
 -- Day 19b
 
 day19b = day19b_output ! 0
 
+-- shortcut
 day19b_output =
- timeCPU_process day19a_instructions $
-  listToArray [1,0,0,0,0,0]
+ timeCPU_process $
+  listToArray
+   --[0,8,10551261,0,10551261,10551261]
+   [16078144,9,10551261,0,10551261,10551261]
+
+day19b_output2 =
+ timeCPU_process2 $
+  listToArray
+   --[1,0,0,0,0,0]
+   --[0,9,10551261,0,10551261,1]
+   --[1,9,(div 10551261 3),0,10551261,3]
+   --[4,9,(div 10551261 7),0,10551261,7]
+   --[11,9,(div 10551261 502441),0,10551261,502441]
+   --[11,9,(div 10551261 502441),0,10551261,502441]
+   --[502452,9,10551261,0,10551261,10551261]
+   --[5526883,9,1,0,10551261,10551261]
+   [16078144,9,10551261,0,10551261,10551261]
+
+   --[1,9,10551261,0,10551261,10551261]
+   
+   --1+3+7+21+(502441)*(1+3+7+21) = 16078144
+  
+timeCPU_process2 state
+ | newPointer > day19a_maxPointer
+    || newPointer < 0 = [newState]
+ | otherwise =
+  newState:(timeCPU_process2 newState)
+ where
+  pointer = (state ! day19a_ip)
+  
+  (op,values) = day19a_instructions ! pointer
+  opState = timeCPU_apply op values state
+  
+  newPointer = (opState ! day19a_ip) + 1
+  newState = opState // [(day19a_ip,newPointer)]
 
 -- Day 19a
 
 day19a = day19a_output ! 0
 
 day19a_output =
- timeCPU_process day19a_instructions $
+ timeCPU_process $
   listToArray [0,0,0,0,0,0]
 
-timeCPU_process instructions state
- -- | opPointer > maxPointer || opPointer < 0 =
- -- opState
- | newPointer > maxPointer || newPointer < 0 =
-  opState
+timeCPU_process state
+ | newPointer > day19a_maxPointer
+    || newPointer < 0 = newState
  | otherwise =
-  timeCPU_process instructions newState
+  timeCPU_process newState
  where
-  pointer = state ! day19a_ip
-  maxPointer = snd $ bounds instructions
-  (op,values) = instructions ! pointer
+  pointer = (state ! day19a_ip)
   
+  (op,values) = day19a_instructions ! pointer
   opState = timeCPU_apply op values state
-  opPointer = opState ! day19a_ip
   
-  newPointer = opPointer  + 1
+  newPointer = (opState ! day19a_ip) + 1
   newState = opState // [(day19a_ip,newPointer)]
 
 timeCPU_apply operation [valA,valB,valC] state =
@@ -141,7 +377,10 @@ timeCPU_apply operation [valA,valB,valC] state =
   boolToInt False = 0
   boolToInt True  = 1
 
-day19a_instructions = listToArray day19a_instructionList
+day19a_maxPointer = snd $ bounds day19a_instructions
+
+day19a_instructions =
+ listToArray day19a_instructionList
 
 day19a_instructionList =
  map getInstruction $ tail day19a_split
@@ -150,10 +389,12 @@ day19a_instructionList =
    (op,values)
    where
     split = splitOn ' ' string
-    op = read $ map toUpper $ head split :: Operation
+    op =
+     read $ map toUpper $ head split :: Operation
     values = map read $ tail split :: [Int]
 
-day19a_ip = read $ filter isNumber $ head day19a_split :: Int
+day19a_ip =
+ read $ filter isNumber $ head day19a_split :: Int
 
 day19a_split = splitOn ';' data19
 
@@ -1916,6 +2157,11 @@ listToArray list =
  array (0,max) $ zip [0..max] list
  where
   max = (length list) - 1
+
+listToArrayOne list =
+ array (1,max) $ zip [1..max] list
+ where
+  max = length list
   
 readInt string = read string :: Int
 
