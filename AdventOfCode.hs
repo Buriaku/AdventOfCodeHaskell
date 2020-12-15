@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 import Data.List
 import Data.Array
 import Data.Foldable
@@ -11,7 +13,8 @@ import Data.Maybe
 
 -- import GHC.Generics (Generic)
 
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 -- import qualified Data.HashPSQ as HPSQ
@@ -50,6 +53,262 @@ data Area =
  Floor | Empty | Occupied
  deriving (Eq, Show)
  
+-- Day 15b
+
+day15b =
+ day15b_generate (length data15)
+  (last data15) day15b_intMap
+
+
+day15b_generate ::
+ Int -> Int -> IntMap.IntMap Int -> Int
+day15b_generate i curr (!prevOccuranceMap)
+ | i == 30000000 = curr
+ | otherwise =
+  day15b_generate (i + 1) next occuranceMap
+ where
+  prevOccurance =
+   IntMap.lookup curr prevOccuranceMap
+  occuranceMap =
+   IntMap.insert curr i prevOccuranceMap
+  next =
+   if prevOccurance == Nothing
+    then 0
+    else (i - fromJust prevOccurance)
+
+day15b_intMap =
+ IntMap.fromList $ zip (init data15) [1..]
+ 
+-- Day 15a
+
+day15a =
+ head $ day15a_generate day15a_list
+
+day15a_generate list@(prev:rest)
+ | length list == 2020 = list
+ | otherwise =
+  day15a_generate $ next:list
+ where
+  index = elemIndex prev rest
+  next =
+   if index == Nothing
+    then 0
+    else (fromJust index) + 1
+  
+
+day15a_list = reverse data15
+
+-- Day 14b
+
+day14b =
+ sum $ Map.elems day14b_calc
+
+day14b_calc =
+ day14b_process Map.empty day14a_entries
+
+day14b_process memMap [] = memMap
+day14b_process memMap (entry:restEntries) =
+ day14b_process newMemMap restEntries
+ where
+ (mask,pairs) = entry
+ newMemMap = processEntry memMap mask pairs
+ processEntry memMap mask [] = memMap
+ processEntry memMap mask (currPair:restPairs) =
+  processEntry newMemMap mask restPairs
+  where
+   binList =
+    toBinaryList day14a_binMax $ currPair !! 0
+   value = currPair !! 1
+   maskedList = day14b_applyBitmask mask binList
+   newMemMap = foldl mapInsert memMap maskedList
+   mapInsert acc x =
+     Map.insert x value acc
+ 
+
+day14b_applyBitmask [] [] = [[]]
+day14b_applyBitmask
+ (currMask:restMask) (currBinList:restBinList)
+ | currMask == Nothing =
+  (map (0:)
+   (day14b_applyBitmask restMask restBinList)) ++
+   (map (1:)
+    (day14b_applyBitmask restMask restBinList))
+ | currMask == Just 0 =
+  map (currBinList:)
+   (day14b_applyBitmask restMask restBinList)
+ | otherwise =
+  map (1:)
+   (day14b_applyBitmask restMask restBinList)
+ 
+-- Day 14a
+
+day14a =
+ sum $ map (fromBinaryList day14a_binMax) $
+  Map.elems day14a_calc
+
+day14a_calc =
+ day14a_process Map.empty day14a_entries
+
+day14a_process memMap [] = memMap
+day14a_process memMap (entry:restEntries) =
+ day14a_process newMemMap restEntries
+ where
+ (mask,pairs) = entry
+ newMemMap = processEntry memMap mask pairs
+ processEntry memMap mask [] = memMap
+ processEntry memMap mask (currPair:restPairs) =
+  processEntry newMemMap mask restPairs
+  where
+   memAddress = currPair !! 0
+   binList =
+    toBinaryList day14a_binMax $ currPair !! 1
+   masked = day14a_applyBitmask mask binList
+   newMemMap = Map.insert memAddress masked memMap
+ 
+
+day14a_applyBitmask [] [] = []
+day14a_applyBitmask
+ (currMask:restMask) (currBinList:restBinList)
+ | currMask == Nothing =
+  currBinList:
+   (day14a_applyBitmask restMask restBinList)
+ | otherwise =
+  (fromJust currMask):
+   (day14a_applyBitmask restMask restBinList)
+
+fromBinaryList _ [] = 0
+fromBinaryList power2 (curr:rest) =
+ power2 * curr + (fromBinaryList nextPower2 rest)
+ where
+  nextPower2 = div power2 2
+
+-- to small endian binary list
+toBinaryList power2 n
+ | power2 == 1 =
+  [digit]
+ | otherwise =
+  digit:(toBinaryList nextPower2 rest)
+ where
+  (digit,rest) = divMod n power2
+  nextPower2 = div power2 2
+
+day14a_entries = entries
+ where
+  split = map (init . tail . splitOnList "=;") day14a_units
+  filtered =
+   map (map $ filter (`elem` 'X':['0'..'9'])) split
+  entries = map toEntries filtered
+  toEntries stringList =
+   (mask,pairs)
+   where
+    (maskRaw,pairsRaw) = splitAt 1 stringList
+    mask = map toMask $ head maskRaw
+    pairs = spoolList 2 $ map readInt pairsRaw
+    toMask 'X' = Nothing
+    toMask '0' = Just 0
+    toMask '1' = Just 1
+
+day14a_binMax = 2 ^ 35
+
+day14a_units = tail $ splitOnString "mask" data14
+
+-- Day 13b
+
+day13b_bruteForce n
+ | checked && mod n 1000000 == 0 =
+  n:(day13b_bruteForce $ n + 1)
+ | checked =
+  day13b_bruteForce $ n + 1
+ | otherwise = [m]
+ where
+  m = n * 29 * 631 * 19 * 23 * 41 -- 17 * 449 * 13 * 19 * 41
+  checked =
+   any notDivisible day13b_newBussesOffsets
+  notDivisible (bus,offset) =
+   mod (m + offset) bus /= 0
+   
+day13b_newBussesOffsets =
+ map (\(a,b) -> (a,b - 29))
+  day13b_filteredBussesOffsets
+
+day13b_filteredBussesOffsets =
+ day13b_bussesOffsets \\
+  [(29,0),(631,29),(19,48),(23,52),(41,70)]
+  
+
+lowestCommonMultipleFromPrimeLists primeLists =
+ result -- foldl1 (*) result
+ where
+  result = getResult primes primeLists
+  getResult list@(curr:rest) remainingPrimes
+   | all (== []) remainingPrimes = []
+   | any (elem curr) remainingPrimes =
+    curr:(getResult list finned)
+   | otherwise =
+    getResult rest remainingPrimes
+   where
+    finned = map (delete curr) remainingPrimes
+
+-- day13b_primeLists =
+--  map getPrimeFactors day13b_times
+
+-- day13b_times =
+--  map (\(a,b) -> a + b) day13b_bussesOffsets
+
+day13b_bussesOffsets =
+ zip day13a_busses day13b_offsets
+ 
+day13b_offsets =
+ map fst $
+  filter ((/= "x") . snd) $
+   zip [0..day13b_highest] day13a_entries
+
+day13b_highest = (length day13a_entries) + 1
+
+-- Day 13a
+
+day13a = (time - day13a_magic) * bus
+ where
+  (time,busPrimes) = day13a_check day13a_magic
+  bus = foldl1 (*) busPrimes
+
+day13a_check n
+ | checked == [] = day13a_check $ n + 1
+ | otherwise = (n,checked)
+ where
+  primeFactors = getPrimeFactors n
+  checked = dividable n day13a_busPrimes
+  dividable n [] = []
+  dividable n (primeList:rest)
+   | remaining == [] = primeList
+   | otherwise = dividable n rest
+   where
+    remaining = primeList \\ primeFactors
+   
+day13a_busPrimes = map getPrimeFactors day13a_busses
+
+day13a_busses =
+ map readInt $ filter (/= "x") day13a_entries
+
+day13a_entries = splitOn ',' data13
+
+day13a_magic = 1000507 -- 1006401
+ :: Int
+
+getPrimeFactors :: Int -> [Int]
+getPrimeFactors n = primeFactors n 2 primes []
+
+primeFactors :: Int -> Int -> [Int] -> [Int] -> [Int]
+primeFactors n lastPrime primeList@(nextPrime:otherPrimes) divisorList
+ | mod n lastPrime == 0 = primeFactors (div n lastPrime) lastPrime primeList (lastPrime:divisorList)
+ | mod n nextPrime == 0 = primeFactors (div n nextPrime) nextPrime otherPrimes (nextPrime:divisorList)
+ | nextPrime > n        = divisorList
+ | otherwise            = primeFactors n nextPrime otherPrimes divisorList
+
+primes :: [Int]
+primes =
+ [n | n <- [2..], foldl (\acc x -> if mod n x == 0 then n:acc else acc) [] ([2..(floor (sqrt (fromIntegral n)))] :: [Int]) == []]
+ 
 -- Day 12b
 
 day12b = manhattanDistance day12a_start day12b_calc
@@ -73,8 +332,8 @@ day12b_follow p wp (('F',n):rest) =
   wp rest
 day12b_follow p wp ((char,n):rest) =
  day12b_follow p
-  (movePointByList
-    wp $ replicate n $ charToDirection char) rest
+  (movePointByList wp $ replicate n $
+    charToDirection char) rest
  where
   charToDirection 'N' = North
   charToDirection 'E' = East
@@ -94,11 +353,11 @@ day12a_follow :: Point -> Direction -> [(Char,Int)] -> Point
 day12a_follow p heading [] = p
 day12a_follow p heading (('L',n):rest) =
  day12a_follow p
-  (iterate (`turnDirection` Counterclockwise)
+  (iterate (turnDirection Counterclockwise)
    heading !! (div n 90)) rest
 day12a_follow p heading (('R',n):rest) =
  day12a_follow p
-  (iterate (`turnDirection` Clockwise)
+  (iterate (turnDirection Clockwise)
    heading !! (div n 90)) rest
 day12a_follow p heading (('F',n):rest) =
  day12a_follow
@@ -895,15 +1154,15 @@ choicesFromList list =
   getChoices (a:rest) output =
    getChoices rest $ output ++ (map (a:) output)
 
-turnDirection North Clockwise = East 
-turnDirection East Clockwise = South
-turnDirection South Clockwise = West
-turnDirection West Clockwise = North
+turnDirection Clockwise North = East 
+turnDirection Clockwise East = South
+turnDirection Clockwise South  = West
+turnDirection Clockwise West = North
 
-turnDirection North Counterclockwise = West
-turnDirection East Counterclockwise = North
-turnDirection South Counterclockwise = East
-turnDirection West Counterclockwise = South
+turnDirection Counterclockwise North = West
+turnDirection Counterclockwise East = North
+turnDirection Counterclockwise South = East
+turnDirection Counterclockwise West = South
 
 turnVector Counterclockwise (Point x y) =
  (Point y (-x))
