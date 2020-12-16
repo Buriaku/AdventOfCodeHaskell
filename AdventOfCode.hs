@@ -5,7 +5,7 @@ import Data.Array
 import Data.Foldable
 import Data.Char
 import Data.Maybe
--- import Data.Ord
+import Data.Ord
 -- import Data.Function
 -- import Data.Bits
 -- import Control.Concurrent
@@ -52,6 +52,114 @@ data Turning =
 data Area =
  Floor | Empty | Occupied
  deriving (Eq, Show)
+ 
+-- Day 16b
+
+day16b :: Int
+day16b = foldl1 (*) departureNumbers
+ where
+  correctIndexes :: [Int]
+  correctIndexes =
+   fst $ unzip $ take 6 day16b_calc
+  departureNumbers =
+   map (data16b !!) correctIndexes
+
+day16b_calc :: [(Int,[Int])]
+day16b_calc =
+ sortBy (comparing snd) $
+  day16b_iterate [] day16b_candidateRanges
+
+day16b_iterate ::
+ [(Int, [Int])] -> [(Int, [Int])] ->
+  [(Int, [Int])]
+day16b_iterate found [] = found
+day16b_iterate found list =
+ day16b_iterate (justOne:found) filtered
+ where
+  justOne :: (Int,[Int])
+  justOne =
+   head $
+    filter (\x -> 1 == (length $ snd x)) list
+  foundNumber = head $ snd justOne
+  filtered =
+   map (\(a,b) -> (a,delete foundNumber b)) $
+    delete justOne list
+
+day16b_candidateRanges :: [(Int,[Int])]
+day16b_candidateRanges =
+ zip [0..]
+  (getCandidateRanges $
+    transpose day16b_validTickets)
+ where
+  getCandidateRanges [] = []
+  getCandidateRanges (curr:rest) =
+   (candidates 0 curr):(getCandidateRanges rest)
+  
+  candidates i list
+   | i == length day16a_ranges = []
+   | all (`elem` (day16a_ranges !! i)) list =
+    i:(candidates (i + 1) list)
+   | otherwise =
+    candidates (i + 1) list
+
+day16b_validTickets :: [[Int]]
+day16b_validTickets = day16b_filter data16c
+
+day16b_filter :: [[Int]] -> [[Int]]
+day16b_filter [] = []
+day16b_filter (curr:rest)
+ | all (`elem` day16a_allInts) curr =
+  curr:(day16b_filter rest)
+ | otherwise =
+  day16b_filter rest
+ 
+-- Day 16a
+
+day16a :: Int
+day16a = sum day16a_calc
+
+day16a_calc :: [Int]
+day16a_calc =
+ concat $ day16a_filter data16c
+
+day16a_filter :: [[Int]] -> [[Int]]
+day16a_filter [] = []
+day16a_filter (curr:rest) =
+ (filter (`notElem` day16a_allInts) curr):
+  (day16a_filter rest)
+
+day16a_allInts :: [Int]
+day16a_allInts =
+ nub $ sort $ concat day16a_ranges
+
+day16a_ranges :: [[Int]]
+day16a_ranges = ranges
+ where
+  ranges =
+   map (\[[a,b],[c,d]] -> [a..b] ++ [c..d])
+    intPairPairs
+    
+  intPairPairs :: [[[Int]]]
+  intPairPairs =
+   map (map (map readInt))
+    entriesDigits
+   
+  entriesDigits :: [[[String]]]
+  entriesDigits =
+    map (map (map (filter (`elem` ['0'..'9'])))) $
+     entries
+  
+  entries :: [[[String]]]
+  entries =
+   map (map (splitOn '-'))
+    entryOrs
+ 
+  entryOrs :: [[String]]
+  entryOrs =
+   map (splitOnString " or ") lines
+  
+  lines :: [String]
+  lines = splitOn ';' data16a 
  
 -- Day 15b
 
