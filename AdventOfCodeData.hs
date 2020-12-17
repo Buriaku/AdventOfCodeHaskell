@@ -1,5 +1,7 @@
 module AdventOfCodeData where
 
+data17="#.#..###;.#....##;.###...#;..####..;....###.;##.#.#.#;..#..##.;#.....##"
+
 data16a="departure location: 37-479 or 485-954;departure station: 35-653 or 668-974;departure platform: 36-225 or 240-955;departure track: 27-854 or 879-966;departure date: 46-828 or 834-951;departure time: 36-591 or 613-957;arrival location: 26-770 or 785-955;arrival station: 33-695 or 712-961;arrival platform: 39-369 or 391-968;arrival track: 34-331 or 354-963;class: 27-63 or 89-951;duration: 42-545 or 561-956;price: 50-250 or 258-955;route: 41-150 or 168-953;row: 49-356 or 366-970;seat: 39-429 or 441-974;train: 30-180 or 206-958;type: 37-577 or 588-950;wagon: 38-137 or 148-956;zone: 36-909 or 927-970"
 
 data16b :: [Int]

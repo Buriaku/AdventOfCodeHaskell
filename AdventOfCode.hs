@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 import Data.List
 import Data.Array
@@ -9,12 +10,13 @@ import Data.Ord
 -- import Data.Function
 -- import Data.Bits
 -- import Control.Concurrent
--- import Data.Hashable
+import Data.Hashable
 
--- import GHC.Generics (Generic)
+import GHC.Generics (Generic)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Strict as IntMap
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 -- import qualified Data.HashPSQ as HPSQ
@@ -23,7 +25,9 @@ import AdventOfCodeData
 
 data Point =
  Point Int Int
- deriving (Show, Eq, Ord, Ix)
+ deriving (Show, Eq, Ord, Ix, Generic)
+ 
+instance Hashable Point
 
 data Tobogan =
  Tree | Ground
@@ -52,6 +56,173 @@ data Turning =
 data Area =
  Floor | Empty | Occupied
  deriving (Eq, Show)
+ 
+data Point3D =
+ Point3D Int Int Int
+ deriving (Show, Eq, Ord, Ix, Generic)
+ 
+instance Hashable Point3D
+
+data Point4D =
+ Point4D Int Int Int Int
+ deriving (Show, Eq, Ord, Ix, Generic)
+ 
+instance Hashable Point4D
+
+ 
+-- Day 17b
+
+day17b = length day17b_calc
+
+day17b_calc :: [Bool]
+day17b_calc =
+ filter id $ HashMap.elems $ day17b_getResult
+
+day17b_getResult :: HashMap.HashMap Point4D Bool  
+day17b_getResult =
+  day17b_iterate 0 day17b_map
+
+day17b_iterate ::
+ Int -> HashMap.HashMap Point4D Bool ->
+  HashMap.HashMap Point4D Bool
+
+day17b_iterate 6 (!cubeMap) = cubeMap
+day17b_iterate i (!cubeMap) =
+ day17b_iterate (i + 1) newCubeMap
+ where
+  lastPoints = HashMap.keys cubeMap
+  points =
+   toList $ Set.fromList $ concat $
+    map (\p -> p:(day17b_neighbors p)) lastPoints
+  
+  updates = getUpdates points
+  newCubeMap =
+   foldl (\acc (a,b) -> HashMap.insert a b acc)
+    cubeMap updates
+  
+  getUpdates [] = []
+  getUpdates (curr:rest)
+   | currState && elem activeNeighbors [2,3] =
+    (curr,True):(getUpdates rest)
+   | not currState && activeNeighbors == 3 =
+    (curr,True):(getUpdates rest)
+   | otherwise =
+    (curr,False):(getUpdates rest)
+   where
+    neighboring = day17b_neighbors curr
+    currState = day17b_find cubeMap curr
+    neighborStates =
+     map (day17b_find cubeMap) neighboring
+    activeNeighbors =
+     length $ filter id neighborStates
+
+day17b_find ::
+ HashMap.HashMap Point4D Bool -> Point4D -> Bool
+
+day17b_find m p =
+ HashMap.findWithDefault False p m
+ 
+day17b_neighbors :: Point4D -> [Point4D]
+day17b_neighbors (Point4D a b c d) =
+ [Point4D x y z w|
+   x <- [(a - 1)..(a + 1)],
+   y <- [(b - 1)..(b + 1)],
+   z <- [(c - 1)..(c + 1)],
+   w <- [(d - 1)..(d + 1)],
+   x /= a || y /= b || z /= c || w /= d]
+   
+day17b_map :: HashMap.HashMap Point4D Bool
+day17b_map = HashMap.fromList day17b_list
+
+day17b_list = assocList
+ where
+  coords = day17b_points
+  assocList =
+   zip coords $ map charToBool $ concat day17a_lines
+  charToBool '.' = False
+  charToBool '#' = True
+
+day17b_points =
+ [Point4D x y 0 0|
+  y <- [0..day17a_yMax], x <- [0..day17a_xMax]]
+ 
+-- Day 17a
+
+day17a = length day17a_calc
+
+day17a_calc :: [Bool]
+day17a_calc =
+ filter id $ HashMap.elems $
+  day17a_iterate 0 day17a_map
+
+day17a_iterate ::
+ Int -> HashMap.HashMap Point3D Bool ->
+  HashMap.HashMap Point3D Bool
+
+day17a_iterate 6 (!cubeMap) = cubeMap
+day17a_iterate i (!cubeMap) =
+ day17a_iterate (i+1) newCubeMap
+ where
+  lastPoints = HashMap.keys cubeMap
+  points =
+   toList $ Set.fromList $ concat $
+    map (\p -> p:(day17a_neighbors p)) lastPoints
+  updates = getUpdates points
+  newCubeMap =
+   foldl (\acc (a,b) -> HashMap.insert a b acc)
+    cubeMap updates
+  
+  getUpdates [] = []
+  getUpdates (curr:rest)
+   | currState && elem activeNeighbors [2,3] =
+    (curr,True):(getUpdates rest)
+   | not currState && activeNeighbors == 3 =
+    (curr,True):(getUpdates rest)
+   | otherwise =
+    (curr,False):(getUpdates rest)
+   where
+    neighboring = day17a_neighbors curr
+    currState = day17a_find cubeMap curr
+    neighborStates =
+     map (day17a_find cubeMap) neighboring
+    activeNeighbors =
+     length $ filter id neighborStates
+
+day17a_find ::
+ HashMap.HashMap Point3D Bool -> Point3D -> Bool
+ 
+day17a_find m p =
+ HashMap.findWithDefault False p m
+ 
+day17a_neighbors :: Point3D -> [Point3D]
+day17a_neighbors (Point3D a b c) =
+ [Point3D x y z |
+   x <- [(a - 1)..(a + 1)],
+   y <- [(b - 1)..(b + 1)],
+   z <- [(c - 1)..(c + 1)],
+   x /= a || y /= b || z /= c]
+   
+day17a_map :: HashMap.HashMap Point3D Bool
+day17a_map = HashMap.fromList day17a_list
+
+day17a_list = assocList
+ where
+  coords = day17a_points
+  assocList =
+   zip coords $ map charToBool $ concat day17a_lines
+  charToBool '.' = False
+  charToBool '#' = True
+
+day17a_points =
+ [Point3D x y 0 |
+  y <- [0..day17a_yMax], x <- [0..day17a_xMax]]
+
+day17a_xMax = day17a_xLength - 1
+day17a_yMax = day17a_yLength - 1
+day17a_xLength = length $ head day17a_lines
+day17a_yLength = length day17a_lines
+
+day17a_lines = splitOn ';' data17
  
 -- Day 16b
 
