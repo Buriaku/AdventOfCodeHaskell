@@ -69,6 +69,135 @@ data Point4D =
  
 instance Hashable Point4D
 
+-- Day 18b
+
+day18b = sum day18b_calc
+
+day18b_calc =
+ map (day18a_processEntry 0 "") day18b_entries
+
+day18b_entries =
+ map day18b_insertPar day18b_entriesReplaced
+
+day18b_insertPar :: [String] -> [String]
+day18b_insertPar list
+ | elem "#" list =
+  day18b_insertPar newList
+ | otherwise = list
+ where
+  newList = day18b_processPlus list
+  
+day18b_processPlus list =
+ leftRest ++ "(":leftElem ++ "+":rightElem ++ ")": rightRest
+ where
+  index = fromJust $ elemIndex "#" list
+  (left,hash:right) = splitAt index list
+  (rightElem,rightRest) =
+   day18b_getElemRight 0 [] right
+  (leftElemRev,leftRestRev) =
+   day18b_getElemLeft 0 [] $ reverse left
+  leftElem = reverse leftElemRev
+  leftRest = reverse leftRestRev
+
+day18b_getElemRight level reverseList (curr:rest)
+ | curr == "(" =
+  day18b_getElemRight
+   (level + 1) (curr:reverseList) rest
+ | curr == ")" && level == 1 =
+  (reverse (curr:reverseList),rest)
+ | curr == ")" =
+  day18b_getElemRight
+   (level - 1) (curr:reverseList) rest
+ | all isDigit curr && level == 0 =
+  ([curr],rest)
+ | otherwise =
+  day18b_getElemRight
+   level (curr:reverseList) rest
+
+day18b_getElemLeft level reverseList (curr:rest)
+ | curr == ")" =
+  day18b_getElemLeft
+   (level + 1) (curr:reverseList) rest
+ | curr == "(" && level == 1 =
+  (reverse (curr:reverseList),rest)
+ | curr == "(" =
+  day18b_getElemLeft
+   (level - 1) (curr:reverseList) rest
+ | all isDigit curr && level == 0 =
+  ([curr],rest)
+ | otherwise =
+  day18b_getElemLeft
+   level (curr:reverseList) rest
+
+day18b_entriesReplaced =
+ map (replaceListItem "+" "#") day18a_entries
+ 
+replaceListItem a b list =
+ foldr foldFunc [] list
+ where
+  foldFunc x acc
+   | x == a = b:acc
+   | otherwise = x:acc
+
+-- Day 18a
+
+day18a = sum day18a_calc
+
+day18a_calc =
+ map (day18a_processEntry 0 "") day18a_entries
+
+day18a_processEntry prevRes _ [] = prevRes
+day18a_processEntry prevRes prevOp list@(curr:rest)
+ | curr == "+" =
+  day18a_processEntry
+   prevRes "+" rest
+ | curr == "*" =
+  day18a_processEntry
+   prevRes "*" rest
+ | all isDigit curr && prevOp == "+" =
+  day18a_processEntry
+   (prevRes + (readInt curr)) "" rest
+ | all isDigit curr && prevOp == "*" =
+  day18a_processEntry
+   (prevRes * (readInt curr)) "" rest
+ | all isDigit curr =
+  day18a_processEntry
+   (readInt curr) "" rest
+ | curr == "(" && prevOp == "+" =
+  day18a_processEntry
+   (prevRes + parRes) "" parRest
+ | curr == "(" && prevOp == "*" =
+  day18a_processEntry
+   (prevRes * parRes) "" parRest
+ | curr == "(" =
+  day18a_processEntry
+   (parRes) "" parRest
+  where
+   (parList,parRest) =
+    day18a_processPar 0 [] list
+   parRes = day18a_processEntry 0 "" parList
+    
+day18a_processPar level reverseList (curr:rest)
+ | curr == "(" && level == 0 =
+  day18a_processPar
+   (level + 1) reverseList rest
+ | curr == "(" =
+  day18a_processPar
+   (level + 1) (curr:reverseList) rest
+ | curr == ")" && level == 1 =
+  (reverse reverseList,rest)
+ | curr == ")" =
+  day18a_processPar
+   (level - 1) (curr:reverseList) rest
+ | otherwise =
+  day18a_processPar level (curr:reverseList) rest
+
+day18a_entries =
+ map ((filter (/= "")) . spoolOnList "+*()") day18a_lines
+
+day18a_lines = splitOn ';' day18a_filtered
+
+day18a_filtered = filter (/= ' ') data18
  
 -- Day 17b
 
@@ -1400,6 +1529,15 @@ splitOnList elementList list =
   (\x acc@(acc_h:acc_t) ->
    if elem x elementList
     then []:acc
+    else (x:acc_h):acc_t)
+  [[]] list
+
+spoolOnList :: Eq a => [a] -> [a] -> [[a]]
+spoolOnList elementList list =
+ foldr
+  (\x acc@(acc_h:acc_t) ->
+   if elem x elementList
+    then []:[x]:acc
     else (x:acc_h):acc_t)
   [[]] list
   
