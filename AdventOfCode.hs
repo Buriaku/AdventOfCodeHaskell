@@ -69,6 +69,177 @@ data Point4D =
  
 instance Hashable Point4D
 
+data Rule =
+ RuleList [[Int]] | RuleChar Char
+ deriving (Eq, Show)
+
+-- Day 19b
+
+day19b :: Int
+day19b =
+ length $ filter id $
+  fst $ unzip day19b_calc
+
+day19b_calc :: [(Bool,[String])]
+day19b_calc =
+ noTrailing
+ where
+  allChecked =
+   map
+   (\x -> day19b_checkRule start [x])
+    day19a_messages
+  testOkay =
+   filter (\(a,_) -> id a) allChecked
+  noTrailing =
+   filter (\(_,b) -> any (== "") b) testOkay
+  start = day19b_ruleIntMap IntMap.! 0
+
+day19b_checkRule ::
+ Rule -> [String] -> (Bool,[String])
+
+day19b_checkRule _ [] = (False,[""])
+
+day19b_checkRule (RuleChar char) strings
+ | filtered /= [] =
+  (True,restStrings)
+ | otherwise =
+  (False,[""]) 
+ where
+  filtered =
+   filter
+    (\x -> length x > 0 && head x == char) strings
+  restStrings =
+   map tail filtered
+
+day19b_checkRule (RuleList list) strings
+ | testListStrings /= [] =
+  (True,testListStrings)
+ | otherwise =
+  (False,[""])
+ where
+  ruleLists =
+   map (map (day19b_ruleIntMap IntMap.!)) list
+   
+  testList =
+   map (`makeTestList` strings) ruleLists 
+  filtered =
+   filter (\x -> id $ fst x) testList
+  testListStrings =
+   nub $ concat $ snd $ unzip filtered
+  
+  makeTestList ::
+   [Rule] -> [String] -> (Bool,[String])
+  
+  makeTestList [] strings = (True, strings)
+  
+  makeTestList (curr:restRules) strings
+   | test =
+    makeTestList restRules restStrings
+   | otherwise =
+    (False,[""])
+   where
+    (test,restStrings) =
+     day19b_checkRule curr strings 
+
+day19b_ruleIntMap =
+ IntMap.insert 8 (RuleList [[42],[42,8]]) $
+  IntMap.insert 11 (RuleList [[42,31],[42,11,31]]) $
+   day19a_ruleIntMap
+
+-- Day 19a
+
+day19a :: Int
+day19a =
+ length $ filter id $
+  fst $ unzip
+   day19a_calc
+
+day19a_calc :: [(Bool,[String])]
+day19a_calc =
+ noTrailing
+ where
+  allChecked =
+   map
+   (\x -> day19a_checkRule start [x])
+    day19a_messages
+  testOkay =
+   filter (\(a,_) -> id a) allChecked
+  noTrailing =
+   filter (\(_,b) -> any (== "") b) testOkay
+  start = day19a_ruleIntMap IntMap.! 0
+
+day19a_checkRule ::
+ Rule -> [String] -> (Bool,[String])
+
+day19a_checkRule _ [] = (False,[""])
+
+day19a_checkRule (RuleChar char) strings
+ | filtered /= [] =
+  (True,restStrings)
+ | otherwise =
+  (False,[""]) 
+ where
+  filtered =
+   filter
+    (\x -> length x > 0 && head x == char) strings
+  restStrings =
+   map tail filtered
+
+day19a_checkRule (RuleList list) strings
+ | testListStrings /= [] =
+  (True,testListStrings)
+ | otherwise =
+  (False,[""])
+ where
+  ruleLists =
+   map (map (day19a_ruleIntMap IntMap.!)) list
+   
+  testList =
+   map (`makeTestList` strings) ruleLists 
+  filtered =
+   filter (\x -> id $ fst x) testList
+  testListStrings =
+   nub $ concat $ snd $ unzip filtered
+  
+  makeTestList ::
+   [Rule] -> [String] -> (Bool,[String])
+  
+  makeTestList [] strings = (True, strings)
+  
+  makeTestList (curr:restRules) strings
+   | test =
+    makeTestList restRules restStrings
+   | otherwise =
+    (False,[""])
+   where
+    (test,restStrings) =
+     day19a_checkRule curr strings
+    
+day19a_messages = splitOn ';' data19b
+
+day19a_ruleIntMap = IntMap.fromList day19a_ruleAssoc
+
+day19a_ruleAssoc = assocList
+ where
+  numberRules =
+   map (splitOnString ": ") day19a_ruleLines
+  assocList =
+   map
+    (\[a,b] -> (readInt a, processLine b))
+    numberRules
+  
+  processLine line
+   | elem '\"' line =
+    RuleChar $ line !! 1
+   | otherwise =
+    RuleList numberLists
+   where
+    split = splitOnString " | " line
+    splitLists = map (splitOn ' ') split
+    numberLists = map (map readInt) splitLists
+
+day19a_ruleLines = splitOn ';' data19a
+
 -- Day 18b
 
 day18b = sum day18b_calc
